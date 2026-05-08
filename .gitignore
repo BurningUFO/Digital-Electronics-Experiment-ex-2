@@ -1,0 +1,17 @@
+build/
+.Xil/
+xsim.dir/
+*.jou
+*.log
+*.str
+*.mcs
+*.prm
+*.bit
+*.dcp
+*.rpt
+*.rpx
+*.pb
+*.wdb
+*.vcd
+*.pb
+dfx_runtime.txt
