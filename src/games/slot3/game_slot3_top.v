@@ -49,8 +49,10 @@ module game_slot3_top (
     localparam [9:0] WORLD_W     = 10'd640;
     localparam [9:0] WORLD_H     = 10'd480;
     localparam [7:0] ATTRACT_FRAMES = 8'd150;
+    localparam [8:0] RED_COOL_FRAMES = 9'd360;
     localparam [8:0] BULLET_FRAMES  = 9'd240;
     localparam [8:0] BULLET_COOL    = 9'd180;
+    localparam [7:0] BOMB_FRAMES    = 8'd120;
 
     wire ps2_ready;
     wire [7:0] ps2_byte;
@@ -63,6 +65,8 @@ module game_slot3_top (
     reg key_space;
     reg key_enter;
     reg key_esc;
+    reg key_j;
+    reg key_k;
     reg key_up;
     reg key_down;
     reg key_left;
@@ -70,9 +74,12 @@ module game_slot3_top (
     reg key_space_prev;
     reg key_enter_prev;
     reg key_esc_prev;
+    reg key_j_prev;
+    reg key_k_prev;
 
     reg [2:0] state;
     reg [1:0] start_choice;
+    reg [3:0] start_difficulty;
     reg pill_choice;
     reg [3:0] level;
     reg [15:0] lfsr;
@@ -90,6 +97,21 @@ module game_slot3_top (
     reg [8:0] bullet_timer;
     reg [8:0] bullet_cooldown;
     reg [7:0] attract_timer;
+    reg [8:0] red_cooldown;
+    reg [1:0] neo_dir;
+    reg [5:0] ammo;
+    reg [1:0] charges;
+    reg shot_active;
+    reg [9:0] shot_x;
+    reg [9:0] shot_y;
+    reg [1:0] shot_dir;
+    reg bomb_active;
+    reg [7:0] bomb_timer;
+    reg [9:0] bomb_x;
+    reg [9:0] bomb_y;
+    reg crater_active;
+    reg [5:0] crater_tile_x;
+    reg [4:0] crater_tile_y;
     reg [4:0] smith_count;
     reg [4:0] smith_active;
     reg [7:0] move_phase;
@@ -109,10 +131,13 @@ module game_slot3_top (
     wire confirm_pulse;
     wire skill_pulse;
     wire esc_pulse;
+    wire shoot_pulse;
+    wire bomb_pulse;
     wire bullet_time_active;
     wire player_move_tick;
     wire npc_move_tick;
     wire smith_move_tick;
+    wire shot_move_tick;
     wire [5:0] tile_x;
     wire [4:0] tile_y;
     wire [3:0] local_x;
@@ -123,6 +148,8 @@ module game_slot3_top (
     wire neo_phone_touch;
     wire neo_red_touch;
     wire neo_trinity_touch;
+    wire neo_gun_touch;
+    wire neo_charge_touch;
     wire [9:0] rain_sum;
 
     integer i;
@@ -130,6 +157,11 @@ module game_slot3_top (
     reg [9:0] npc_try_y;
     reg [9:0] npc_rev_x;
     reg [9:0] npc_rev_y;
+    reg [9:0] smith_try_x;
+    reg [9:0] smith_try_y;
+    reg [9:0] smith_alt_x;
+    reg [9:0] smith_alt_y;
+    reg smith_chase_now;
 
     console_ps2_rx u_slot3_ps2_rx (
         .clk(clk),
@@ -147,11 +179,14 @@ module game_slot3_top (
     assign confirm_pulse = (btn_c | key_enter | key_space) & ~(key_enter_prev | key_space_prev);
     assign skill_pulse = key_space & ~key_space_prev;
     assign esc_pulse = key_esc & ~key_esc_prev;
+    assign shoot_pulse = key_j & ~key_j_prev;
+    assign bomb_pulse = key_k & ~key_k_prev;
     assign bullet_time_active = (bullet_timer != 9'd0);
     assign player_move_tick = frame_tick && (move_phase[0] == 1'b0);
     assign npc_move_tick = frame_tick && (move_phase[2:0] == 3'b000);
     assign smith_move_tick = frame_tick && ((bullet_time_active && (move_phase[4:0] == 5'b00000)) ||
                                             (!bullet_time_active && (move_phase[2:0] <= level[2:0])));
+    assign shot_move_tick = frame_tick && (move_phase[0] == 1'b0);
     assign tile_x = pixel_x[9:4];
     assign tile_y = pixel_y[8:4];
     assign local_x = pixel_x[3:0];
@@ -163,6 +198,8 @@ module game_slot3_top (
     assign neo_phone_touch = slot3_rect_overlap(neo_x, neo_y, HERO_SIZE, HERO_SIZE, phone_x, phone_y, PHONE_SIZE, PHONE_SIZE);
     assign neo_red_touch = slot3_rect_overlap(neo_x, neo_y, HERO_SIZE, HERO_SIZE, red_x, red_y, NPC_SIZE, NPC_SIZE);
     assign neo_trinity_touch = slot3_rect_overlap(neo_x, neo_y, HERO_SIZE, HERO_SIZE, trinity_x, trinity_y, NPC_SIZE, NPC_SIZE);
+    assign neo_gun_touch = slot3_rect_overlap(neo_x, neo_y, HERO_SIZE, HERO_SIZE, 10'd104, 10'd392, 10'd14, 10'd14);
+    assign neo_charge_touch = slot3_rect_overlap(neo_x, neo_y, HERO_SIZE, HERO_SIZE, 10'd520, 10'd104, 10'd14, 10'd14);
 
     assign led = 16'h0000;
     assign an = 8'hff;
@@ -200,7 +237,11 @@ module game_slot3_top (
                          ((ty[2:0] ^ seed[7:5]) >= 3'd5));
             tree_patch = (((tx[2:0] ^ ty[2:0] ^ seed[10:8]) == 3'd0) ||
                          (((tx[3:0] + ty[3:0] + lvl) & 4'hF) == 4'h3));
-            if (slot3_is_bridge(tx, ty, seed)) begin
+            if (crater_active &&
+                (tx + 6'd1 >= crater_tile_x) && (tx <= crater_tile_x + 6'd1) &&
+                (ty + 5'd1 >= crater_tile_y) && (ty <= crater_tile_y + 5'd1)) begin
+                slot3_tile_type = TILE_STREET;
+            end else if (slot3_is_bridge(tx, ty, seed)) begin
                 slot3_tile_type = TILE_STREET;
             end else if (river_band) begin
                 slot3_tile_type = TILE_RIVER;
@@ -237,6 +278,18 @@ module game_slot3_top (
             tt = slot3_tile_type(px[9:4], py[8:4], seed, lvl);
             slot3_point_walkable = (px < WORLD_W) && (py < WORLD_H) &&
                                    (tt != TILE_RIVER) && (tt != TILE_BUILD);
+        end
+    endfunction
+
+    function slot3_near_neo;
+        input [9:0] sx;
+        input [9:0] sy;
+        reg [10:0] dx;
+        reg [10:0] dy;
+        begin
+            dx = (sx > neo_x) ? (sx - neo_x) : (neo_x - sx);
+            dy = (sy > neo_y) ? (sy - neo_y) : (neo_y - sy);
+            slot3_near_neo = (dx + dy) < (11'd170 + {5'd0, level, 2'd0});
         end
     endfunction
 
@@ -283,6 +336,8 @@ module game_slot3_top (
             key_space <= 1'b0;
             key_enter <= 1'b0;
             key_esc <= 1'b0;
+            key_j <= 1'b0;
+            key_k <= 1'b0;
             key_up <= 1'b0;
             key_down <= 1'b0;
             key_left <= 1'b0;
@@ -290,10 +345,14 @@ module game_slot3_top (
             key_space_prev <= 1'b0;
             key_enter_prev <= 1'b0;
             key_esc_prev <= 1'b0;
+            key_j_prev <= 1'b0;
+            key_k_prev <= 1'b0;
         end else begin
             key_space_prev <= key_space;
             key_enter_prev <= key_enter;
             key_esc_prev <= key_esc;
+            key_j_prev <= key_j;
+            key_k_prev <= key_k;
             if (ps2_ready) begin
                 if (ps2_byte == 8'hF0) begin
                     ps2_break <= 1'b1;
@@ -308,6 +367,8 @@ module game_slot3_top (
                         8'h29: key_space <= ~ps2_break;
                         8'h5A: key_enter <= ~ps2_break;
                         8'h76: key_esc <= ~ps2_break;
+                        8'h3B: key_j <= ~ps2_break;
+                        8'h42: key_k <= ~ps2_break;
                         8'h75: key_up <= ps2_ext ? ~ps2_break : key_up;
                         8'h72: key_down <= ps2_ext ? ~ps2_break : key_down;
                         8'h6B: key_left <= ps2_ext ? ~ps2_break : key_left;
@@ -340,6 +401,21 @@ module game_slot3_top (
             bullet_timer <= 9'd0;
             bullet_cooldown <= 9'd0;
             attract_timer <= 8'd0;
+            red_cooldown <= 9'd0;
+            neo_dir <= 2'd1;
+            ammo <= 6'd0;
+            charges <= 2'd0;
+            shot_active <= 1'b0;
+            shot_x <= 10'd0;
+            shot_y <= 10'd0;
+            shot_dir <= 2'd1;
+            bomb_active <= 1'b0;
+            bomb_timer <= 8'd0;
+            bomb_x <= 10'd0;
+            bomb_y <= 10'd0;
+            crater_active <= 1'b0;
+            crater_tile_x <= 6'd0;
+            crater_tile_y <= 5'd0;
             smith_count <= (new_level < 4'd7) ? (5'd1 + {1'b0, new_level}) : 5'd8;
             smith_active <= 5'd1;
             smith_x[0] <= 10'd544;
@@ -381,6 +457,7 @@ module game_slot3_top (
         if (reset || !selected) begin
             state <= ST_START;
             start_choice <= 2'd0;
+            start_difficulty <= 4'd1;
             pill_choice <= 1'b0;
             level <= 4'd1;
             lfsr <= 16'h3ACE;
@@ -400,6 +477,21 @@ module game_slot3_top (
             bullet_timer <= 9'd0;
             bullet_cooldown <= 9'd0;
             attract_timer <= 8'd0;
+            red_cooldown <= 9'd0;
+            neo_dir <= 2'd1;
+            ammo <= 6'd0;
+            charges <= 2'd0;
+            shot_active <= 1'b0;
+            shot_x <= 10'd0;
+            shot_y <= 10'd0;
+            shot_dir <= 2'd1;
+            bomb_active <= 1'b0;
+            bomb_timer <= 8'd0;
+            bomb_x <= 10'd0;
+            bomb_y <= 10'd0;
+            crater_active <= 1'b0;
+            crater_tile_x <= 6'd0;
+            crater_tile_y <= 5'd0;
             smith_count <= 5'd1;
             smith_active <= 5'd1;
             for (i = 0; i < 8; i = i + 1) begin
@@ -423,17 +515,33 @@ module game_slot3_top (
                 if (attract_timer != 8'd0) begin
                     attract_timer <= attract_timer - 8'd1;
                 end
+                if (red_cooldown != 9'd0) begin
+                    red_cooldown <= red_cooldown - 9'd1;
+                end
+                if (bomb_active && bomb_timer != 8'd0) begin
+                    bomb_timer <= bomb_timer - 8'd1;
+                end
             end
 
             case (state)
                 ST_START: begin
                     if ((input_up || input_down) && frame_tick && move_phase[4:0] == 5'd0) begin
-                        start_choice <= start_choice ^ 2'd1;
+                        start_choice <= input_up ? ((start_choice == 2'd0) ? 2'd2 : start_choice - 2'd1) :
+                                                    ((start_choice == 2'd2) ? 2'd0 : start_choice + 2'd1);
+                    end
+                    if ((input_left || input_right) && start_choice == 2'd1 && frame_tick && move_phase[4:0] == 5'd0) begin
+                        if (input_left && start_difficulty > 4'd1) begin
+                            start_difficulty <= start_difficulty - 4'd1;
+                        end else if (input_right && start_difficulty < 4'd5) begin
+                            start_difficulty <= start_difficulty + 4'd1;
+                        end
                     end
                     if (confirm_pulse) begin
                         if (start_choice == 2'd0) begin
-                            slot3_start_level(4'd1, lfsr ^ 16'h4D1B);
+                            slot3_start_level(start_difficulty, lfsr ^ 16'h4D1B);
                             state <= ST_PLAY;
+                        end else if (start_choice == 2'd1) begin
+                            start_difficulty <= (start_difficulty == 4'd5) ? 4'd1 : start_difficulty + 4'd1;
                         end else begin
                             state <= ST_EXIT;
                         end
@@ -451,15 +559,72 @@ module game_slot3_top (
                         neo_x <= next_neo_x;
                         neo_y <= next_neo_y;
                     end
-                    if (neo_red_touch && attract_timer == 8'd0) begin
+                    if (player_move_tick && attract_timer == 8'd0) begin
+                        if (input_up) begin
+                            neo_dir <= 2'd0;
+                        end else if (input_right) begin
+                            neo_dir <= 2'd1;
+                        end else if (input_down) begin
+                            neo_dir <= 2'd2;
+                        end else if (input_left) begin
+                            neo_dir <= 2'd3;
+                        end
+                    end
+                    if (neo_red_touch && attract_timer == 8'd0 && red_cooldown == 9'd0) begin
                         attract_timer <= ATTRACT_FRAMES;
+                        red_cooldown <= RED_COOL_FRAMES;
                     end
                     if (neo_trinity_touch) begin
                         has_bullet_time <= 1'b1;
                     end
+                    if (neo_gun_touch && ammo == 6'd0) begin
+                        ammo <= 6'd18;
+                    end
+                    if (neo_charge_touch && charges == 2'd0) begin
+                        charges <= 2'd2;
+                    end
+                    if (shoot_pulse && ammo != 6'd0 && !shot_active) begin
+                        shot_active <= 1'b1;
+                        shot_x <= neo_x + 10'd7;
+                        shot_y <= neo_y + 10'd7;
+                        shot_dir <= neo_dir;
+                        ammo <= ammo - 6'd1;
+                    end
+                    if (bomb_pulse && charges != 2'd0 && !bomb_active) begin
+                        bomb_active <= 1'b1;
+                        bomb_timer <= BOMB_FRAMES;
+                        bomb_x <= (neo_dir == 2'd3 && neo_x > 10'd18) ? neo_x - 10'd18 :
+                                  (neo_dir == 2'd1) ? neo_x + 10'd24 : neo_x;
+                        bomb_y <= (neo_dir == 2'd0 && neo_y > 10'd18) ? neo_y - 10'd18 :
+                                  (neo_dir == 2'd2) ? neo_y + 10'd24 : neo_y;
+                        charges <= charges - 2'd1;
+                    end
                     if (neo_phone_touch) begin
                         pill_choice <= 1'b0;
                         state <= ST_PILL;
+                    end
+
+                    if (shot_active && shot_move_tick) begin
+                        if (shot_dir == 2'd0) begin
+                            shot_y <= shot_y - 10'd6;
+                        end else if (shot_dir == 2'd1) begin
+                            shot_x <= shot_x + 10'd6;
+                        end else if (shot_dir == 2'd2) begin
+                            shot_y <= shot_y + 10'd6;
+                        end else begin
+                            shot_x <= shot_x - 10'd6;
+                        end
+                        if (shot_x < 10'd4 || shot_x > 10'd632 || shot_y < 10'd4 || shot_y > 10'd472 ||
+                            !slot3_rect_walkable(shot_x, shot_y, 10'd4, 10'd4, map_seed, level)) begin
+                            shot_active <= 1'b0;
+                        end
+                    end
+
+                    if (bomb_active && bomb_timer == 8'd1) begin
+                        crater_active <= 1'b1;
+                        crater_tile_x <= bomb_x[9:4];
+                        crater_tile_y <= bomb_y[8:4];
+                        bomb_active <= 1'b0;
                     end
 
                     if (npc_move_tick) begin
@@ -476,22 +641,44 @@ module game_slot3_top (
                                 npc_y[i] <= npc_try_y;
                             end
                         end
-                        red_x <= (red_x < neo_x) ? red_x + 10'd1 : red_x - 10'd1;
-                        red_y <= (red_y < neo_y) ? red_y + 10'd1 : red_y - 10'd1;
+                        if (slot3_rect_walkable(lfsr[8] ? red_x + 10'd1 : red_x - 10'd1,
+                                                lfsr[9] ? red_y + 10'd1 : red_y - 10'd1,
+                                                NPC_SIZE, NPC_SIZE, map_seed, level)) begin
+                            red_x <= lfsr[8] ? red_x + 10'd1 : red_x - 10'd1;
+                            red_y <= lfsr[9] ? red_y + 10'd1 : red_y - 10'd1;
+                        end
+                        if (slot3_rect_walkable(lfsr[10] ? trinity_x + 10'd1 : trinity_x - 10'd1,
+                                                lfsr[11] ? trinity_y + 10'd1 : trinity_y - 10'd1,
+                                                NPC_SIZE, NPC_SIZE, map_seed, level)) begin
+                            trinity_x <= lfsr[10] ? trinity_x + 10'd1 : trinity_x - 10'd1;
+                            trinity_y <= lfsr[11] ? trinity_y + 10'd1 : trinity_y - 10'd1;
+                        end
                     end
 
                     if (smith_move_tick) begin
                         for (i = 0; i < 8; i = i + 1) begin
                             if (i < smith_active) begin
-                                if (smith_x[i] + 10'd5 < neo_x) begin
-                                    smith_x[i] <= smith_x[i] + 10'd1;
-                                end else if (smith_x[i] > neo_x + 10'd5) begin
-                                    smith_x[i] <= smith_x[i] - 10'd1;
+                                smith_chase_now = slot3_near_neo(smith_x[i], smith_y[i]);
+                                smith_try_x = smith_x[i];
+                                smith_try_y = smith_y[i];
+                                if (smith_chase_now) begin
+                                    smith_try_x = (smith_x[i] + 10'd5 < neo_x) ? smith_x[i] + 10'd1 :
+                                                  (smith_x[i] > neo_x + 10'd5) ? smith_x[i] - 10'd1 : smith_x[i];
+                                    smith_try_y = (smith_y[i] + 10'd5 < neo_y) ? smith_y[i] + 10'd1 :
+                                                  (smith_y[i] > neo_y + 10'd5) ? smith_y[i] - 10'd1 : smith_y[i];
+                                end else begin
+                                    smith_try_x = lfsr[i] ? smith_x[i] + 10'd1 : smith_x[i] - 10'd1;
+                                    smith_try_y = lfsr[i + 4] ? smith_y[i] + 10'd1 : smith_y[i] - 10'd1;
                                 end
-                                if (smith_y[i] + 10'd5 < neo_y) begin
-                                    smith_y[i] <= smith_y[i] + 10'd1;
-                                end else if (smith_y[i] > neo_y + 10'd5) begin
-                                    smith_y[i] <= smith_y[i] - 10'd1;
+                                smith_alt_x = smith_try_x;
+                                smith_alt_y = smith_y[i];
+                                if (slot3_rect_walkable(smith_try_x, smith_try_y, NPC_SIZE, NPC_SIZE, map_seed, level)) begin
+                                    smith_x[i] <= smith_try_x;
+                                    smith_y[i] <= smith_try_y;
+                                end else if (slot3_rect_walkable(smith_alt_x, smith_alt_y, NPC_SIZE, NPC_SIZE, map_seed, level)) begin
+                                    smith_x[i] <= smith_alt_x;
+                                end else if (slot3_rect_walkable(smith_x[i], smith_try_y, NPC_SIZE, NPC_SIZE, map_seed, level)) begin
+                                    smith_y[i] <= smith_try_y;
                                 end
                             end
                         end
@@ -501,6 +688,21 @@ module game_slot3_top (
                         if (i < smith_active && slot3_rect_overlap(neo_x, neo_y, HERO_SIZE, HERO_SIZE,
                                                                    smith_x[i], smith_y[i], NPC_SIZE, NPC_SIZE)) begin
                             state <= ST_LOSE;
+                        end
+                        if (i < smith_active && shot_active &&
+                            slot3_rect_overlap(shot_x, shot_y, 10'd4, 10'd4,
+                                               smith_x[i], smith_y[i], NPC_SIZE, NPC_SIZE)) begin
+                            smith_x[i] <= 10'd700;
+                            smith_y[i] <= 10'd520;
+                            shot_active <= 1'b0;
+                        end
+                        if (i < smith_active && bomb_active && bomb_timer == 8'd1 &&
+                            slot3_rect_overlap((bomb_x > 10'd24) ? bomb_x - 10'd24 : 10'd0,
+                                               (bomb_y > 10'd24) ? bomb_y - 10'd24 : 10'd0,
+                                               10'd64, 10'd64,
+                                               smith_x[i], smith_y[i], NPC_SIZE, NPC_SIZE)) begin
+                            smith_x[i] <= 10'd700;
+                            smith_y[i] <= 10'd520;
                         end
                     end
                     for (i = 0; i < 8; i = i + 1) begin
@@ -564,6 +766,18 @@ module game_slot3_top (
     wire trinity_on = display_active &&
                       (pixel_x >= trinity_x) && (pixel_x < trinity_x + NPC_SIZE) &&
                       (pixel_y >= trinity_y) && (pixel_y < trinity_y + NPC_SIZE);
+    wire shot_on = display_active && shot_active &&
+                   (pixel_x >= shot_x) && (pixel_x < shot_x + 10'd4) &&
+                   (pixel_y >= shot_y) && (pixel_y < shot_y + 10'd4);
+    wire bomb_on = display_active && bomb_active &&
+                   (pixel_x >= bomb_x) && (pixel_x < bomb_x + 10'd12) &&
+                   (pixel_y >= bomb_y) && (pixel_y < bomb_y + 10'd12);
+    wire gun_on = display_active && (ammo == 6'd0) &&
+                  (pixel_x >= 10'd104) && (pixel_x < 10'd118) &&
+                  (pixel_y >= 10'd392) && (pixel_y < 10'd406);
+    wire charge_on = display_active && (charges == 2'd0) &&
+                     (pixel_x >= 10'd520) && (pixel_x < 10'd534) &&
+                     (pixel_y >= 10'd104) && (pixel_y < 10'd118);
 
     reg npc_on;
     reg smith_on;
@@ -663,12 +877,21 @@ module game_slot3_top (
             end
             if (state == ST_START &&
                 (((start_choice == 2'd0) && (pixel_x >= 10'd204) && (pixel_x < 10'd436) && (pixel_y >= 10'd246) && (pixel_y < 10'd296)) ||
-                 ((start_choice == 2'd1) && (pixel_x >= 10'd204) && (pixel_x < 10'd436) && (pixel_y >= 10'd306) && (pixel_y < 10'd356)))) begin
+                 ((start_choice == 2'd1) && (pixel_x >= 10'd204) && (pixel_x < 10'd436) && (pixel_y >= 10'd306) && (pixel_y < 10'd356)) ||
+                 ((start_choice == 2'd2) && (pixel_x >= 10'd204) && (pixel_x < 10'd436) && (pixel_y >= 10'd366) && (pixel_y < 10'd416)))) begin
                 if (pixel_x[2] ^ pixel_y[2]) begin
                     vga_r = 4'h0;
                     vga_g = 4'hF;
                     vga_b = 4'h4;
                 end
+            end
+            if (state == ST_START && start_choice == 2'd1 &&
+                pixel_x >= (10'd280 + {start_difficulty, 5'd0}) &&
+                pixel_x <  (10'd296 + {start_difficulty, 5'd0}) &&
+                pixel_y >= 10'd325 && pixel_y < 10'd337) begin
+                vga_r = 4'hF;
+                vga_g = 4'hF;
+                vga_b = 4'h0;
             end
         end else if (state == ST_PILL) begin
             vga_r = 4'h0;
@@ -744,6 +967,26 @@ module game_slot3_top (
                 vga_r = 4'h0;
                 vga_g = 4'hC;
                 vga_b = 4'hF;
+            end
+            if (gun_on) begin
+                vga_r = 4'hD;
+                vga_g = 4'hF;
+                vga_b = 4'hD;
+            end
+            if (charge_on) begin
+                vga_r = 4'hF;
+                vga_g = 4'h7;
+                vga_b = 4'h1;
+            end
+            if (bomb_on) begin
+                vga_r = bomb_timer[3] ? 4'hF : 4'h8;
+                vga_g = bomb_timer[3] ? 4'hE : 4'h3;
+                vga_b = 4'h0;
+            end
+            if (shot_on) begin
+                vga_r = 4'hF;
+                vga_g = 4'hF;
+                vga_b = 4'h4;
             end
             if (npc_on && !smith_on) begin
                 vga_r = (npc_ly < 4'd4) ? 4'hE : 4'h4;

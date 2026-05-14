@@ -15,3 +15,4 @@ xsim.dir/
 *.vcd
 *.pb
 dfx_runtime.txt
+game3_preview/
