@@ -71,6 +71,7 @@ module game_slot3_top (
     reg key_down;
     reg key_left;
     reg key_right;
+    reg btn_c_prev;
     reg key_space_prev;
     reg key_enter_prev;
     reg key_esc_prev;
@@ -176,7 +177,9 @@ module game_slot3_top (
     assign input_down = btn_d | key_s | key_down;
     assign input_left = btn_l | key_a | key_left;
     assign input_right = btn_r | key_d | key_right;
-    assign confirm_pulse = (btn_c | key_enter | key_space) & ~(key_enter_prev | key_space_prev);
+    assign confirm_pulse = (btn_c & ~btn_c_prev) |
+                           (key_enter & ~key_enter_prev) |
+                           (key_space & ~key_space_prev);
     assign skill_pulse = key_space & ~key_space_prev;
     assign esc_pulse = key_esc & ~key_esc_prev;
     assign shoot_pulse = key_j & ~key_j_prev;
@@ -342,12 +345,14 @@ module game_slot3_top (
             key_down <= 1'b0;
             key_left <= 1'b0;
             key_right <= 1'b0;
+            btn_c_prev <= 1'b0;
             key_space_prev <= 1'b0;
             key_enter_prev <= 1'b0;
             key_esc_prev <= 1'b0;
             key_j_prev <= 1'b0;
             key_k_prev <= 1'b0;
         end else begin
+            btn_c_prev <= btn_c;
             key_space_prev <= key_space;
             key_enter_prev <= key_enter;
             key_esc_prev <= key_esc;
