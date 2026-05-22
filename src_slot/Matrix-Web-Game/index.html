@@ -1,0 +1,39 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>黑客帝国 - Game 3 Preview</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <main class="shell">
+    <div class="topbar">
+      <div>
+        <h1>黑客帝国</h1>
+        <p>Neo must find the phone before Smith rewrites the city.</p>
+      </div>
+      <div class="status">
+        <span id="levelLabel">Level 1</span>
+        <span id="skillLabel">Bullet Time: locked</span>
+        <span id="combatLabel">Gun: none</span>
+      </div>
+    </div>
+    <canvas id="game" width="960" height="640" aria-label="Matrix game preview"></canvas>
+    <div class="controls">
+      <span>WASD / 方向键移动</span>
+      <span>Space 使用子弹时间</span>
+      <span>J 射击</span>
+      <span>K 破坏地形</span>
+      <span>E EMP</span>
+      <span>Q 隐身外套</span>
+      <span>拾取 EMP / 隐身 / 地图碎片 / 电话卡</span>
+      <span>目标：Trinity → 终端 → 救人 → 电话亭</span>
+      <span>Smith：巡逻 / 猎杀 / 拦截</span>
+      <span>Enter 确认</span>
+      <span>Esc 返回</span>
+    </div>
+  </main>
+  <script src="game.js"></script>
+</body>
+</html>

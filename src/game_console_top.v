@@ -186,6 +186,38 @@ module game_console_top (
         .VGA_VS(tank_vga_vs)
     );
 
+`ifdef SIM_TANK_ONLY
+    `define STUB_SLOT1
+    `define STUB_SLOT2
+    `define STUB_SLOT3
+    `define STUB_SLOT4
+`elsif SIM_SLOT1_ONLY
+    `define STUB_SLOT2
+    `define STUB_SLOT3
+    `define STUB_SLOT4
+`elsif SIM_SLOT2_ONLY
+    `define STUB_SLOT1
+    `define STUB_SLOT3
+    `define STUB_SLOT4
+`elsif SIM_SLOT3_ONLY
+    `define STUB_SLOT1
+    `define STUB_SLOT2
+    `define STUB_SLOT4
+`elsif SIM_SLOT4_ONLY
+    `define STUB_SLOT1
+    `define STUB_SLOT2
+    `define STUB_SLOT3
+`endif
+
+`ifdef STUB_SLOT1
+    assign slot1_vga_r = 4'h0;
+    assign slot1_vga_g = 4'h0;
+    assign slot1_vga_b = 4'h0;
+    assign slot1_led = 16'h0000;
+    assign slot1_an = 8'hff;
+    assign slot1_seg = 8'hff;
+    assign slot1_buzzer = 1'b1;
+`else
     game_slot1_top u_game_slot1_top (
         .clk(CLK100MHZ),
         .reset(reset | ~slot1_selected),
@@ -218,7 +250,17 @@ module game_console_top (
         .dp(slot1_seg[0]),
         .buzzer(slot1_buzzer)
     );
+`endif
 
+`ifdef STUB_SLOT2
+    assign slot2_vga_r = 4'h0;
+    assign slot2_vga_g = 4'h0;
+    assign slot2_vga_b = 4'h0;
+    assign slot2_led = 16'h0000;
+    assign slot2_an = 8'hff;
+    assign slot2_seg = 8'hff;
+    assign slot2_buzzer = 1'b1;
+`else
     game_slot2_top u_game_slot2_top (
         .clk(CLK100MHZ),
         .reset(reset | ~slot2_selected),
@@ -251,7 +293,17 @@ module game_console_top (
         .dp(slot2_seg[0]),
         .buzzer(slot2_buzzer)
     );
+`endif
 
+`ifdef STUB_SLOT3
+    assign slot3_vga_r = 4'h0;
+    assign slot3_vga_g = 4'h0;
+    assign slot3_vga_b = 4'h0;
+    assign slot3_led = 16'h0000;
+    assign slot3_an = 8'hff;
+    assign slot3_seg = 8'hff;
+    assign slot3_buzzer = 1'b1;
+`else
     game_slot3_top u_game_slot3_top (
         .clk(CLK100MHZ),
         .reset(reset | ~slot3_selected),
@@ -284,7 +336,17 @@ module game_console_top (
         .dp(slot3_seg[0]),
         .buzzer(slot3_buzzer)
     );
+`endif
 
+`ifdef STUB_SLOT4
+    assign slot4_vga_r = 4'h0;
+    assign slot4_vga_g = 4'h0;
+    assign slot4_vga_b = 4'h0;
+    assign slot4_led = 16'h0000;
+    assign slot4_an = 8'hff;
+    assign slot4_seg = 8'hff;
+    assign slot4_buzzer = 1'b1;
+`else
     game_slot4_top u_game_slot4_top (
         .clk(CLK100MHZ),
         .reset(reset | ~slot4_selected),
@@ -317,6 +379,7 @@ module game_console_top (
         .dp(slot4_seg[0]),
         .buzzer(slot4_buzzer)
     );
+`endif
 
     assign active_slot_vga_r = slot1_selected ? slot1_vga_r :
                                slot2_selected ? slot2_vga_r :

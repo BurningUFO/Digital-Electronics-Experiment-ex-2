@@ -104,8 +104,6 @@ module tank_top (
     wire        p1_hit_by_p2_next;
     wire        p2_hit_by_p1_now;
     wire        p2_hit_by_p1_next;
-    wire [10:0] tank_hit_explosion_x;
-    wire [9:0]  tank_hit_explosion_y;
     wire [10:0] explosion_now_x;
     wire [9:0]  explosion_now_y;
     wire [10:0] explosion_next_x;
@@ -174,6 +172,42 @@ module tank_top (
     reg        fire_beep_req;
     reg        hit_beep_req;
     reg        game_over_beep_req;
+    reg [10:0] p1_bullet_spawn_x_q;
+    reg [9:0]  p1_bullet_spawn_y_q;
+    reg        p1_bullet_spawn_ok_q;
+    reg [10:0] p2_bullet_spawn_x_q;
+    reg [9:0]  p2_bullet_spawn_y_q;
+    reg        p2_bullet_spawn_ok_q;
+    reg [10:0] p1_bullet_next_x_q;
+    reg [9:0]  p1_bullet_next_y_q;
+    reg        p1_bullet_move_ok_q;
+    reg [10:0] p2_bullet_next_x_q;
+    reg [9:0]  p2_bullet_next_y_q;
+    reg        p2_bullet_move_ok_q;
+    reg        bullets_overlap_now_q;
+    reg        bullets_overlap_next_q;
+    reg        p1_hit_event_q;
+    reg        p2_hit_event_q;
+    reg [10:0] p1_hit_explosion_x_q;
+    reg [9:0]  p1_hit_explosion_y_q;
+    reg [10:0] p2_hit_explosion_x_q;
+    reg [9:0]  p2_hit_explosion_y_q;
+    reg [10:0] explosion_now_x_q;
+    reg [9:0]  explosion_now_y_q;
+    reg [10:0] explosion_next_x_q;
+    reg [9:0]  explosion_next_y_q;
+    reg        p1_move_pending;
+    reg        p2_move_pending;
+    reg [1:0]  p1_move_dir_q;
+    reg [1:0]  p2_move_dir_q;
+    reg [10:0] p1_move_check_x;
+    reg [9:0]  p1_move_check_y;
+    reg [10:0] p1_move_blocker_x;
+    reg [9:0]  p1_move_blocker_y;
+    reg [10:0] p2_move_check_x;
+    reg [9:0]  p2_move_check_y;
+    reg [10:0] p2_move_blocker_x;
+    reg [9:0]  p2_move_blocker_y;
 
     localparam [5:0] P1_TILE_X = 6'd2;
     localparam [4:0] P1_TILE_Y = 5'd26;
@@ -231,7 +265,11 @@ module tank_top (
     assign nav_right = p1_right | p2_right;
     assign nav_fire_pulse = p1_fire_pulse | p2_fire_pulse;
     assign play_enable = ~title_screen & ~menu_screen & ~map_select_screen & ~game_over;
+`ifdef SIM_FAST_VGA
+    assign ui_blink_on = ui_blink_counter[23];
+`else
     assign ui_blink_on = ui_blink_counter[25];
+`endif
 
     assign spawn_p1_x = (selected_map_id == MAP_FORTRESS) ? 11'd64  :
                         (selected_map_id == MAP_MAZE)     ? 11'd48  :
@@ -289,10 +327,10 @@ module tank_top (
     assign p1_local_y = pixel_y - p1_y;
     assign p2_local_x = pixel_x - p2_x[9:0];
     assign p2_local_y = pixel_y - p2_y;
-    assign p1_effective_x = (p1_move_req && p1_move_ok) ? p1_next_x : p1_x;
-    assign p1_effective_y = (p1_move_req && p1_move_ok) ? p1_next_y : p1_y;
-    assign p2_effective_x = (p2_move_req && p2_move_ok) ? p2_next_x : p2_x;
-    assign p2_effective_y = (p2_move_req && p2_move_ok) ? p2_next_y : p2_y;
+    assign p1_effective_x = p1_x;
+    assign p1_effective_y = p1_y;
+    assign p2_effective_x = p2_x;
+    assign p2_effective_y = p2_y;
 
     assign p1_bullet_in_box = p1_bullet_active && display_active &&
                               (pixel_x >= p1_bullet_x) && (pixel_x < p1_bullet_x + BULLET_SIZE_X) &&
@@ -375,14 +413,6 @@ module tank_top (
                                (p1_bullet_next_y + 10'd5 >= p2_effective_y);
     assign p1_hit_event = p1_hit_by_p2_now | p1_hit_by_p2_next;
     assign p2_hit_event = p2_hit_by_p1_now | p2_hit_by_p1_next;
-
-    assign tank_hit_explosion_x = p1_hit_event ? p1_effective_x :
-                                  p2_hit_event ? p2_effective_x :
-                                                                             11'd0;
-
-    assign tank_hit_explosion_y = p1_hit_event ? p1_effective_y :
-                                  p2_hit_event ? p2_effective_y :
-                                                                             10'd0;
 
     assign explosion_now_x = ((p1_bullet_x < p2_bullet_x) ? p1_bullet_x : p2_bullet_x) - 11'd5;
     assign explosion_now_y = ((p1_bullet_y < p2_bullet_y) ? p1_bullet_y : p2_bullet_y) - 10'd5;
@@ -552,19 +582,19 @@ module tank_top (
 
     collision_check u_p1_collision_check (
         .map_id      (selected_map_id),
-        .obj_x      (p1_next_x),
-        .obj_y      (p1_next_y),
-        .blocker_x  (p2_x),
-        .blocker_y  (p2_y),
+        .obj_x      (p1_move_check_x),
+        .obj_y      (p1_move_check_y),
+        .blocker_x  (p1_move_blocker_x),
+        .blocker_y  (p1_move_blocker_y),
         .move_ok    (p1_move_ok)
     );
 
     collision_check u_p2_collision_check (
         .map_id      (selected_map_id),
-        .obj_x      (p2_next_x),
-        .obj_y      (p2_next_y),
-        .blocker_x  (p1_effective_x),
-        .blocker_y  (p1_effective_y),
+        .obj_x      (p2_move_check_x),
+        .obj_y      (p2_move_check_y),
+        .blocker_x  (p2_move_blocker_x),
+        .blocker_y  (p2_move_blocker_y),
         .move_ok    (p2_move_ok)
     );
 
@@ -644,6 +674,94 @@ module tank_top (
             rgb_r = tile_r;
             rgb_g = tile_g;
             rgb_b = tile_b;
+        end
+    end
+
+    always @(posedge CLK100MHZ) begin
+        if (reset) begin
+            p1_bullet_spawn_x_q <= 11'd0;
+            p1_bullet_spawn_y_q <= 10'd0;
+            p1_bullet_spawn_ok_q <= 1'b0;
+            p2_bullet_spawn_x_q <= 11'd0;
+            p2_bullet_spawn_y_q <= 10'd0;
+            p2_bullet_spawn_ok_q <= 1'b0;
+            p1_bullet_next_x_q <= 11'd0;
+            p1_bullet_next_y_q <= 10'd0;
+            p1_bullet_move_ok_q <= 1'b0;
+            p2_bullet_next_x_q <= 11'd0;
+            p2_bullet_next_y_q <= 10'd0;
+            p2_bullet_move_ok_q <= 1'b0;
+            bullets_overlap_now_q <= 1'b0;
+            bullets_overlap_next_q <= 1'b0;
+            p1_hit_event_q <= 1'b0;
+            p2_hit_event_q <= 1'b0;
+            p1_hit_explosion_x_q <= 11'd0;
+            p1_hit_explosion_y_q <= 10'd0;
+            p2_hit_explosion_x_q <= 11'd0;
+            p2_hit_explosion_y_q <= 10'd0;
+            explosion_now_x_q <= 11'd0;
+            explosion_now_y_q <= 10'd0;
+            explosion_next_x_q <= 11'd0;
+            explosion_next_y_q <= 10'd0;
+            p1_move_pending <= 1'b0;
+            p2_move_pending <= 1'b0;
+            p1_move_dir_q <= DIR_RIGHT;
+            p2_move_dir_q <= DIR_LEFT;
+            p1_move_check_x <= 11'd48;
+            p1_move_check_y <= 10'd240;
+            p1_move_blocker_x <= 11'd576;
+            p1_move_blocker_y <= 10'd240;
+            p2_move_check_x <= 11'd576;
+            p2_move_check_y <= 10'd240;
+            p2_move_blocker_x <= 11'd48;
+            p2_move_blocker_y <= 10'd240;
+        end else begin
+            p1_bullet_spawn_x_q <= p1_bullet_spawn_x;
+            p1_bullet_spawn_y_q <= p1_bullet_spawn_y;
+            p1_bullet_spawn_ok_q <= p1_bullet_spawn_ok;
+            p2_bullet_spawn_x_q <= p2_bullet_spawn_x;
+            p2_bullet_spawn_y_q <= p2_bullet_spawn_y;
+            p2_bullet_spawn_ok_q <= p2_bullet_spawn_ok;
+            p1_bullet_next_x_q <= p1_bullet_next_x;
+            p1_bullet_next_y_q <= p1_bullet_next_y;
+            p1_bullet_move_ok_q <= p1_bullet_move_ok;
+            p2_bullet_next_x_q <= p2_bullet_next_x;
+            p2_bullet_next_y_q <= p2_bullet_next_y;
+            p2_bullet_move_ok_q <= p2_bullet_move_ok;
+            bullets_overlap_now_q <= bullets_overlap_now;
+            bullets_overlap_next_q <= bullets_overlap_next;
+            p1_hit_event_q <= p1_hit_event;
+            p2_hit_event_q <= p2_hit_event;
+            p1_hit_explosion_x_q <= p1_effective_x;
+            p1_hit_explosion_y_q <= p1_effective_y;
+            p2_hit_explosion_x_q <= p2_effective_x;
+            p2_hit_explosion_y_q <= p2_effective_y;
+            explosion_now_x_q <= explosion_now_x;
+            explosion_now_y_q <= explosion_now_y;
+            explosion_next_x_q <= explosion_next_x;
+            explosion_next_y_q <= explosion_next_y;
+
+            if (p1_move_pending) begin
+                p1_move_pending <= 1'b0;
+            end else if (move_tick && play_enable && p1_move_req) begin
+                p1_move_pending <= 1'b1;
+                p1_move_dir_q <= p1_move_dir;
+                p1_move_check_x <= p1_next_x;
+                p1_move_check_y <= p1_next_y;
+                p1_move_blocker_x <= p2_x;
+                p1_move_blocker_y <= p2_y;
+            end
+
+            if (p2_move_pending) begin
+                p2_move_pending <= 1'b0;
+            end else if (move_tick && play_enable && p2_move_req) begin
+                p2_move_pending <= 1'b1;
+                p2_move_dir_q <= p2_move_dir;
+                p2_move_check_x <= p2_next_x;
+                p2_move_check_y <= p2_next_y;
+                p2_move_blocker_x <= p1_x;
+                p2_move_blocker_y <= p1_y;
+            end
         end
     end
 
@@ -765,87 +883,87 @@ module tank_top (
                     fire_beep_req <= 1'b1;
                 end
             end else if (play_enable) begin
-                if (move_tick && p1_move_req) begin
-                    p1_dir <= p1_move_dir;
+                if (p1_move_pending) begin
+                    p1_dir <= p1_move_dir_q;
                     if (p1_move_ok) begin
-                        p1_x <= p1_next_x;
-                        p1_y <= p1_next_y;
+                        p1_x <= p1_move_check_x;
+                        p1_y <= p1_move_check_y;
                     end
                 end
 
-                if (move_tick && p2_move_req) begin
-                    p2_dir <= p2_move_dir;
+                if (p2_move_pending) begin
+                    p2_dir <= p2_move_dir_q;
                     if (p2_move_ok) begin
-                        p2_x <= p2_next_x;
-                        p2_y <= p2_next_y;
+                        p2_x <= p2_move_check_x;
+                        p2_y <= p2_move_check_y;
                     end
                 end
 
-                if (p1_fire_pulse && p1_bullet_spawn_ok) begin
-                    p1_bullet_x <= p1_bullet_spawn_x;
-                    p1_bullet_y <= p1_bullet_spawn_y;
+                if (p1_fire_pulse && p1_bullet_spawn_ok_q) begin
+                    p1_bullet_x <= p1_bullet_spawn_x_q;
+                    p1_bullet_y <= p1_bullet_spawn_y_q;
                     p1_bullet_dir <= p1_dir;
                     p1_bullet_active <= 1'b1;
                     fire_beep_req <= 1'b1;
                 end else if (bullet_tick && p1_bullet_active) begin
-                    if (p1_bullet_move_ok) begin
-                        p1_bullet_x <= p1_bullet_next_x;
-                        p1_bullet_y <= p1_bullet_next_y;
+                    if (p1_bullet_move_ok_q) begin
+                        p1_bullet_x <= p1_bullet_next_x_q;
+                        p1_bullet_y <= p1_bullet_next_y_q;
                     end else begin
                         p1_bullet_active <= 1'b0;
                     end
                 end
 
-                if (p2_fire_pulse && p2_bullet_spawn_ok) begin
-                    p2_bullet_x <= p2_bullet_spawn_x;
-                    p2_bullet_y <= p2_bullet_spawn_y;
+                if (p2_fire_pulse && p2_bullet_spawn_ok_q) begin
+                    p2_bullet_x <= p2_bullet_spawn_x_q;
+                    p2_bullet_y <= p2_bullet_spawn_y_q;
                     p2_bullet_dir <= p2_dir;
                     p2_bullet_active <= 1'b1;
                     fire_beep_req <= 1'b1;
                 end else if (bullet_tick && p2_bullet_active) begin
-                    if (p2_bullet_move_ok) begin
-                        p2_bullet_x <= p2_bullet_next_x;
-                        p2_bullet_y <= p2_bullet_next_y;
+                    if (p2_bullet_move_ok_q) begin
+                        p2_bullet_x <= p2_bullet_next_x_q;
+                        p2_bullet_y <= p2_bullet_next_y_q;
                     end else begin
                         p2_bullet_active <= 1'b0;
                     end
                 end
 
                 if (bullet_tick) begin
-                    if (bullets_overlap_now) begin
+                    if (bullets_overlap_now_q) begin
                         p1_bullet_active <= 1'b0;
                         p2_bullet_active <= 1'b0;
-                        explosion_x <= explosion_now_x;
-                        explosion_y <= explosion_now_y;
+                        explosion_x <= explosion_now_x_q;
+                        explosion_y <= explosion_now_y_q;
                         explosion_phase <= 2'd0;
                         explosion_active <= 1'b1;
                         explosion_subtick <= 1'b0;
-                    end else if (!p1_fire_pulse && !p2_fire_pulse && bullets_overlap_next) begin
+                    end else if (!p1_fire_pulse && !p2_fire_pulse && bullets_overlap_next_q) begin
                         p1_bullet_active <= 1'b0;
                         p2_bullet_active <= 1'b0;
-                        explosion_x <= explosion_next_x;
-                        explosion_y <= explosion_next_y;
+                        explosion_x <= explosion_next_x_q;
+                        explosion_y <= explosion_next_y_q;
                         explosion_phase <= 2'd0;
                         explosion_active <= 1'b1;
                         explosion_subtick <= 1'b0;
-                    end else if (p1_hit_event || p2_hit_event) begin
+                    end else if (p1_hit_event_q || p2_hit_event_q) begin
                         hit_beep_req <= 1'b1;
 
-                        if (p1_hit_event && (p1_lives != 2'd0))
+                        if (p1_hit_event_q && (p1_lives != 2'd0))
                             p1_lives <= p1_lives - 2'd1;
 
-                        if (p2_hit_event && (p2_lives != 2'd0))
+                        if (p2_hit_event_q && (p2_lives != 2'd0))
                             p2_lives <= p2_lives - 2'd1;
 
-                        if ((p1_hit_event && (p1_lives == 2'd1)) ||
-                            (p2_hit_event && (p2_lives == 2'd1))) begin
+                        if ((p1_hit_event_q && (p1_lives == 2'd1)) ||
+                            (p2_hit_event_q && (p2_lives == 2'd1))) begin
                             game_over <= 1'b1;
                             game_over_beep_req <= 1'b1;
 
-                            if (p1_hit_event && (p1_lives == 2'd1) &&
-                                p2_hit_event && (p2_lives == 2'd1))
+                            if (p1_hit_event_q && (p1_lives == 2'd1) &&
+                                p2_hit_event_q && (p2_lives == 2'd1))
                                 game_result <= RESULT_DRAW;
-                            else if (p2_hit_event && (p2_lives == 2'd1))
+                            else if (p2_hit_event_q && (p2_lives == 2'd1))
                                 game_result <= RESULT_P1;
                             else
                                 game_result <= RESULT_P2;
@@ -859,8 +977,13 @@ module tank_top (
                         p2_dir <= spawn_p2_dir;
                         p1_bullet_active <= 1'b0;
                         p2_bullet_active <= 1'b0;
-                        explosion_x <= tank_hit_explosion_x;
-                        explosion_y <= tank_hit_explosion_y;
+                        if (p1_hit_event_q) begin
+                            explosion_x <= p1_hit_explosion_x_q;
+                            explosion_y <= p1_hit_explosion_y_q;
+                        end else begin
+                            explosion_x <= p2_hit_explosion_x_q;
+                            explosion_y <= p2_hit_explosion_y_q;
+                        end
                         explosion_phase <= 2'd0;
                         explosion_active <= 1'b1;
                         explosion_subtick <= 1'b0;
@@ -1862,7 +1985,11 @@ module move_tick_gen (
     output reg  tick_20hz
 );
 
+`ifdef SIM_FAST_VGA
+    localparam integer MOVE_DIV = 1_250_000;
+`else
     localparam integer MOVE_DIV = 5_000_000;
+`endif
     reg [22:0] counter;
 
     always @(posedge clk) begin
@@ -1886,7 +2013,11 @@ module bullet_tick_gen (
     output reg  tick_40hz
 );
 
+`ifdef SIM_FAST_VGA
+    localparam integer BULLET_DIV = 625_000;
+`else
     localparam integer BULLET_DIV = 2_500_000;
+`endif
     reg [21:0] counter;
 
     always @(posedge clk) begin
@@ -2312,22 +2443,38 @@ module vga_sync (
 );
 
     localparam integer H_VISIBLE = 640;
+`ifdef SIM_SHORT_BLANK
+    localparam integer H_FRONT   = 2;
+    localparam integer H_SYNC    = 4;
+    localparam integer H_BACK    = 2;
+`else
     localparam integer H_FRONT   = 16;
     localparam integer H_SYNC    = 96;
     localparam integer H_BACK    = 48;
+`endif
     localparam integer H_TOTAL   = H_VISIBLE + H_FRONT + H_SYNC + H_BACK;
 
     localparam integer V_VISIBLE = 480;
+`ifdef SIM_SHORT_BLANK
+    localparam integer V_FRONT   = 1;
+    localparam integer V_SYNC    = 1;
+    localparam integer V_BACK    = 1;
+`else
     localparam integer V_FRONT   = 10;
     localparam integer V_SYNC    = 2;
     localparam integer V_BACK    = 33;
+`endif
     localparam integer V_TOTAL   = V_VISIBLE + V_FRONT + V_SYNC + V_BACK;
 
     reg [1:0] pix_div = 2'b00;
     reg [9:0] h_count = 10'd0;
     reg [9:0] v_count = 10'd0;
 
+`ifdef SIM_FAST_VGA
+    assign pixel_tick = 1'b1;
+`else
     assign pixel_tick = (pix_div == 2'b11);
+`endif
     assign display_active = (h_count < H_VISIBLE) && (v_count < V_VISIBLE);
     assign pixel_x = h_count;
     assign pixel_y = v_count;
@@ -2336,7 +2483,9 @@ module vga_sync (
         if (reset) begin
             pix_div <= 2'b00;
         end else begin
+`ifndef SIM_FAST_VGA
             pix_div <= pix_div + 2'b01;
+`endif
         end
     end
 
