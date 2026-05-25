@@ -60,6 +60,7 @@ module game_slot2_top (
         .frame_tick(frame_tick),
         .btn_l(btn_l), .btn_r(btn_r),
         .btn_d(btn_d), .btn_u(btn_u), .btn_c(btn_c),
+        .ps2_clk(ps2_clk), .ps2_data(ps2_data),
         .move_left(move_left), .move_right(move_right),
         .rotate_cw(rotate_cw),
         .soft_drop(soft_drop), .hard_drop(hard_drop)
@@ -242,6 +243,7 @@ module game_slot2_top (
     reg [11:0] buzz_dur;
     reg        buzz_active;
     reg        buzz_gameover;
+    reg        game_over_seen;
 
     always @(posedge clk) begin
         if (reset) begin
@@ -249,8 +251,12 @@ module game_slot2_top (
             buzz_dur <= 12'd0;
             buzz_active <= 1'b0;
             buzz_gameover <= 1'b0;
+            game_over_seen <= 1'b0;
         end else begin
-            if (game_over) buzz_gameover <= 1'b1;
+            if (!game_over) begin
+                buzz_gameover <= 1'b0;
+                game_over_seen <= 1'b0;
+            end
 
             if (lock_pulse) begin
                 buzz_active <= 1'b1;
@@ -260,10 +266,12 @@ module game_slot2_top (
                 buzz_active <= 1'b1;
                 buzz_dur <= 12'd400;
                 buzz_cnt <= 17'd0;
-            end else if (game_over && buzz_gameover && !buzz_active) begin
+            end else if (game_over && !game_over_seen && !buzz_active) begin
                 buzz_active <= 1'b1;
                 buzz_dur <= 12'd2000;
                 buzz_cnt <= 17'd0;
+                buzz_gameover <= 1'b1;
+                game_over_seen <= 1'b1;
             end else if (buzz_active) begin
                 if (buzz_dur > 0) begin
                     buzz_cnt <= buzz_cnt + 17'd1;
@@ -275,8 +283,6 @@ module game_slot2_top (
                     buzz_active <= 1'b0;
                 end
             end
-
-            if (!game_over) buzz_gameover <= 1'b0;
         end
     end
 

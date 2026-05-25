@@ -111,20 +111,20 @@ module slot2_renderer (
         input [1:0] pr;
         begin
             case ({pt, pr})
-                {3'd0,2'd0}: piece_shape=16'h0F00; {3'd0,2'd1}: piece_shape=16'h2222;
-                {3'd0,2'd2}: piece_shape=16'h00F0; {3'd0,2'd3}: piece_shape=16'h4444;
-                {3'd1,2'd0}: piece_shape=16'h0660; {3'd1,2'd1}: piece_shape=16'h0660;
-                {3'd1,2'd2}: piece_shape=16'h0660; {3'd1,2'd3}: piece_shape=16'h0660;
-                {3'd2,2'd0}: piece_shape=16'h00E4; {3'd2,2'd1}: piece_shape=16'h0464;
-                {3'd2,2'd2}: piece_shape=16'h04E0; {3'd2,2'd3}: piece_shape=16'h04C4;
-                {3'd3,2'd0}: piece_shape=16'h00C6; {3'd3,2'd1}: piece_shape=16'h0264;
-                {3'd3,2'd2}: piece_shape=16'h00C6; {3'd3,2'd3}: piece_shape=16'h0264;
-                {3'd4,2'd0}: piece_shape=16'h006C; {3'd4,2'd1}: piece_shape=16'h0462;
-                {3'd4,2'd2}: piece_shape=16'h006C; {3'd4,2'd3}: piece_shape=16'h0462;
-                {3'd5,2'd0}: piece_shape=16'h00E8; {3'd5,2'd1}: piece_shape=16'h0446;
-                {3'd5,2'd2}: piece_shape=16'h02E0; {3'd5,2'd3}: piece_shape=16'h0C44;
-                {3'd6,2'd0}: piece_shape=16'h00E2; {3'd6,2'd1}: piece_shape=16'h0644;
-                {3'd6,2'd2}: piece_shape=16'h08E0; {3'd6,2'd3}: piece_shape=16'h044C;
+                {3'd0,2'd0}: piece_shape=16'h0F00; {3'd0,2'd1}: piece_shape=16'h1111;
+                {3'd0,2'd2}: piece_shape=16'h00F0; {3'd0,2'd3}: piece_shape=16'h1111;
+                {3'd1,2'd0}: piece_shape=16'h0330; {3'd1,2'd1}: piece_shape=16'h0330;
+                {3'd1,2'd2}: piece_shape=16'h0330; {3'd1,2'd3}: piece_shape=16'h0330;
+                {3'd2,2'd0}: piece_shape=16'h0072; {3'd2,2'd1}: piece_shape=16'h0232;
+                {3'd2,2'd2}: piece_shape=16'h0270; {3'd2,2'd3}: piece_shape=16'h0131;
+                {3'd3,2'd0}: piece_shape=16'h0063; {3'd3,2'd1}: piece_shape=16'h0132;
+                {3'd3,2'd2}: piece_shape=16'h0063; {3'd3,2'd3}: piece_shape=16'h0132;
+                {3'd4,2'd0}: piece_shape=16'h0036; {3'd4,2'd1}: piece_shape=16'h0231;
+                {3'd4,2'd2}: piece_shape=16'h0036; {3'd4,2'd3}: piece_shape=16'h0231;
+                {3'd5,2'd0}: piece_shape=16'h0074; {3'd5,2'd1}: piece_shape=16'h0223;
+                {3'd5,2'd2}: piece_shape=16'h0170; {3'd5,2'd3}: piece_shape=16'h0311;
+                {3'd6,2'd0}: piece_shape=16'h0071; {3'd6,2'd1}: piece_shape=16'h0322;
+                {3'd6,2'd2}: piece_shape=16'h0470; {3'd6,2'd3}: piece_shape=16'h0113;
                 default: piece_shape=16'h0000;
             endcase
         end
@@ -386,40 +386,39 @@ module slot2_renderer (
             if (char_on(pixel_x,pixel_y,d2c(lvl0),10'd306,10'd320,3'd2)) {vga_r,vga_g,vga_b} = 12'hFFF;
 
             // === controls hint ===
-            // "L/R:MOVE U:ROTATE" at (270, 380), scale 1
-            if (char_on(pixel_x,pixel_y,"L",10'd270,10'd380,3'd1)) {vga_r,vga_g,vga_b}=12'hAAA;
+            // "A/D:MOVE W:ROT" at (270, 380), scale 1
+            if (char_on(pixel_x,pixel_y,"A",10'd270,10'd380,3'd1)) {vga_r,vga_g,vga_b}=12'hAAA;
             if (char_on(pixel_x,pixel_y,"/",10'd278,10'd380,3'd1)) {vga_r,vga_g,vga_b}=12'hAAA;
-            if (char_on(pixel_x,pixel_y,"R",10'd286,10'd380,3'd1)) {vga_r,vga_g,vga_b}=12'hAAA;
+            if (char_on(pixel_x,pixel_y,"D",10'd286,10'd380,3'd1)) {vga_r,vga_g,vga_b}=12'hAAA;
             if (char_on(pixel_x,pixel_y,":",10'd294,10'd380,3'd1)) {vga_r,vga_g,vga_b}=12'hAAA;
             if (char_on(pixel_x,pixel_y,"M",10'd302,10'd380,3'd1)) {vga_r,vga_g,vga_b}=12'hAAA;
             if (char_on(pixel_x,pixel_y,"O",10'd310,10'd380,3'd1)) {vga_r,vga_g,vga_b}=12'hAAA;
             if (char_on(pixel_x,pixel_y,"V",10'd318,10'd380,3'd1)) {vga_r,vga_g,vga_b}=12'hAAA;
             if (char_on(pixel_x,pixel_y,"E",10'd326,10'd380,3'd1)) {vga_r,vga_g,vga_b}=12'hAAA;
             if (char_on(pixel_x,pixel_y," ",10'd334,10'd380,3'd1)) {vga_r,vga_g,vga_b}=12'hAAA;
-            if (char_on(pixel_x,pixel_y,"U",10'd342,10'd380,3'd1)) {vga_r,vga_g,vga_b}=12'hAAA;
+            if (char_on(pixel_x,pixel_y,"W",10'd342,10'd380,3'd1)) {vga_r,vga_g,vga_b}=12'hAAA;
             if (char_on(pixel_x,pixel_y,":",10'd350,10'd380,3'd1)) {vga_r,vga_g,vga_b}=12'hAAA;
             if (char_on(pixel_x,pixel_y,"R",10'd358,10'd380,3'd1)) {vga_r,vga_g,vga_b}=12'hAAA;
             if (char_on(pixel_x,pixel_y,"O",10'd366,10'd380,3'd1)) {vga_r,vga_g,vga_b}=12'hAAA;
             if (char_on(pixel_x,pixel_y,"T",10'd374,10'd380,3'd1)) {vga_r,vga_g,vga_b}=12'hAAA;
-            // "D:SOFT DROP C:HARD" at (270, 392), scale 1
-            if (char_on(pixel_x,pixel_y,"D",10'd270,10'd392,3'd1)) {vga_r,vga_g,vga_b}=12'hAAA;
+            // "S:HARD BTN D:SOFT" at (270, 392), scale 1
+            if (char_on(pixel_x,pixel_y,"S",10'd270,10'd392,3'd1)) {vga_r,vga_g,vga_b}=12'hAAA;
             if (char_on(pixel_x,pixel_y,":",10'd278,10'd392,3'd1)) {vga_r,vga_g,vga_b}=12'hAAA;
-            if (char_on(pixel_x,pixel_y,"S",10'd286,10'd392,3'd1)) {vga_r,vga_g,vga_b}=12'hAAA;
-            if (char_on(pixel_x,pixel_y,"O",10'd294,10'd392,3'd1)) {vga_r,vga_g,vga_b}=12'hAAA;
-            if (char_on(pixel_x,pixel_y,"F",10'd302,10'd392,3'd1)) {vga_r,vga_g,vga_b}=12'hAAA;
-            if (char_on(pixel_x,pixel_y,"T",10'd310,10'd392,3'd1)) {vga_r,vga_g,vga_b}=12'hAAA;
+            if (char_on(pixel_x,pixel_y,"H",10'd286,10'd392,3'd1)) {vga_r,vga_g,vga_b}=12'hAAA;
+            if (char_on(pixel_x,pixel_y,"A",10'd294,10'd392,3'd1)) {vga_r,vga_g,vga_b}=12'hAAA;
+            if (char_on(pixel_x,pixel_y,"R",10'd302,10'd392,3'd1)) {vga_r,vga_g,vga_b}=12'hAAA;
+            if (char_on(pixel_x,pixel_y,"D",10'd310,10'd392,3'd1)) {vga_r,vga_g,vga_b}=12'hAAA;
             if (char_on(pixel_x,pixel_y," ",10'd318,10'd392,3'd1)) {vga_r,vga_g,vga_b}=12'hAAA;
-            if (char_on(pixel_x,pixel_y,"D",10'd326,10'd392,3'd1)) {vga_r,vga_g,vga_b}=12'hAAA;
-            if (char_on(pixel_x,pixel_y,"R",10'd334,10'd392,3'd1)) {vga_r,vga_g,vga_b}=12'hAAA;
-            if (char_on(pixel_x,pixel_y,"O",10'd342,10'd392,3'd1)) {vga_r,vga_g,vga_b}=12'hAAA;
-            if (char_on(pixel_x,pixel_y,"P",10'd350,10'd392,3'd1)) {vga_r,vga_g,vga_b}=12'hAAA;
-            if (char_on(pixel_x,pixel_y," ",10'd358,10'd392,3'd1)) {vga_r,vga_g,vga_b}=12'hAAA;
-            if (char_on(pixel_x,pixel_y,"C",10'd366,10'd392,3'd1)) {vga_r,vga_g,vga_b}=12'hAAA;
-            if (char_on(pixel_x,pixel_y,":",10'd374,10'd392,3'd1)) {vga_r,vga_g,vga_b}=12'hAAA;
-            if (char_on(pixel_x,pixel_y,"H",10'd382,10'd392,3'd1)) {vga_r,vga_g,vga_b}=12'hAAA;
-            if (char_on(pixel_x,pixel_y,"A",10'd390,10'd392,3'd1)) {vga_r,vga_g,vga_b}=12'hAAA;
-            if (char_on(pixel_x,pixel_y,"R",10'd398,10'd392,3'd1)) {vga_r,vga_g,vga_b}=12'hAAA;
-            if (char_on(pixel_x,pixel_y,"D",10'd406,10'd392,3'd1)) {vga_r,vga_g,vga_b}=12'hAAA;
+            if (char_on(pixel_x,pixel_y,"B",10'd326,10'd392,3'd1)) {vga_r,vga_g,vga_b}=12'hAAA;
+            if (char_on(pixel_x,pixel_y,"T",10'd334,10'd392,3'd1)) {vga_r,vga_g,vga_b}=12'hAAA;
+            if (char_on(pixel_x,pixel_y,"N",10'd342,10'd392,3'd1)) {vga_r,vga_g,vga_b}=12'hAAA;
+            if (char_on(pixel_x,pixel_y," ",10'd350,10'd392,3'd1)) {vga_r,vga_g,vga_b}=12'hAAA;
+            if (char_on(pixel_x,pixel_y,"D",10'd358,10'd392,3'd1)) {vga_r,vga_g,vga_b}=12'hAAA;
+            if (char_on(pixel_x,pixel_y,":",10'd366,10'd392,3'd1)) {vga_r,vga_g,vga_b}=12'hAAA;
+            if (char_on(pixel_x,pixel_y,"S",10'd374,10'd392,3'd1)) {vga_r,vga_g,vga_b}=12'hAAA;
+            if (char_on(pixel_x,pixel_y,"O",10'd382,10'd392,3'd1)) {vga_r,vga_g,vga_b}=12'hAAA;
+            if (char_on(pixel_x,pixel_y,"F",10'd390,10'd392,3'd1)) {vga_r,vga_g,vga_b}=12'hAAA;
+            if (char_on(pixel_x,pixel_y,"T",10'd398,10'd392,3'd1)) {vga_r,vga_g,vga_b}=12'hAAA;
             // "ESC : BACK" at (270, 404), scale 1
             if (char_on(pixel_x,pixel_y,"E",10'd270,10'd404,3'd1)) {vga_r,vga_g,vga_b}=12'hAAA;
             if (char_on(pixel_x,pixel_y,"S",10'd278,10'd404,3'd1)) {vga_r,vga_g,vga_b}=12'hAAA;

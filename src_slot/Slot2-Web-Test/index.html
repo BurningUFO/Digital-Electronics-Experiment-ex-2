@@ -1,0 +1,53 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Slot2 Tetris Logic Test</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <main class="app">
+    <section class="play-area">
+      <canvas id="game" width="640" height="480" aria-label="slot2 tetris test canvas"></canvas>
+    </section>
+    <aside class="panel">
+      <header>
+        <h1>Slot2 Test</h1>
+        <div id="stateBadge" class="badge">RUNNING</div>
+      </header>
+
+      <div class="stats">
+        <div><span>Score</span><strong id="score">0</strong></div>
+        <div><span>Lines</span><strong id="lines">0</strong></div>
+        <div><span>Level</span><strong id="level">0</strong></div>
+        <div><span>Piece</span><strong id="piece">I</strong></div>
+        <div><span>Next</span><strong id="next">I</strong></div>
+        <div><span>Pos</span><strong id="pos">3,0</strong></div>
+      </div>
+
+      <div class="controls">
+        <button id="pauseBtn" type="button">Pause</button>
+        <button id="stepBtn" type="button">Step</button>
+        <button id="resetBtn" type="button">Reset</button>
+      </div>
+
+      <div class="checks">
+        <button data-test="wallKick" type="button">Test Wall Rotation</button>
+        <button data-test="lineClear" type="button">Test Line Clear</button>
+        <button data-test="hardDrop" type="button">Test Hard Drop</button>
+        <button data-test="topOut" type="button">Test Game Over</button>
+        <button data-test="leftReach" type="button">Test Left Edge</button>
+      </div>
+
+      <div class="help">
+        <p><kbd>A</kbd>/<kbd>D</kbd> move, <kbd>W</kbd> rotate, <kbd>S</kbd> hard drop, <kbd>Space</kbd> pause, <kbd>R</kbd> reset.</p>
+        <p>Buttons create targeted states that stress boundary collision, row compaction, hard-drop locking, and spawn collision.</p>
+      </div>
+
+      <pre id="log" class="log"></pre>
+    </aside>
+  </main>
+  <script src="game.js"></script>
+</body>
+</html>

@@ -73,39 +73,39 @@ module slot2_game_core (
         begin
             case ({ptype, prot})
                 {3'd0, 2'd0}: piece_shape = 16'h0F00;
-                {3'd0, 2'd1}: piece_shape = 16'h2222;
+                {3'd0, 2'd1}: piece_shape = 16'h1111;
                 {3'd0, 2'd2}: piece_shape = 16'h00F0;
-                {3'd0, 2'd3}: piece_shape = 16'h4444;
+                {3'd0, 2'd3}: piece_shape = 16'h1111;
 
-                {3'd1, 2'd0}: piece_shape = 16'h0660;
-                {3'd1, 2'd1}: piece_shape = 16'h0660;
-                {3'd1, 2'd2}: piece_shape = 16'h0660;
-                {3'd1, 2'd3}: piece_shape = 16'h0660;
+                {3'd1, 2'd0}: piece_shape = 16'h0330;
+                {3'd1, 2'd1}: piece_shape = 16'h0330;
+                {3'd1, 2'd2}: piece_shape = 16'h0330;
+                {3'd1, 2'd3}: piece_shape = 16'h0330;
 
-                {3'd2, 2'd0}: piece_shape = 16'h00E4;
-                {3'd2, 2'd1}: piece_shape = 16'h0464;
-                {3'd2, 2'd2}: piece_shape = 16'h04E0;
-                {3'd2, 2'd3}: piece_shape = 16'h04C4;
+                {3'd2, 2'd0}: piece_shape = 16'h0072;
+                {3'd2, 2'd1}: piece_shape = 16'h0232;
+                {3'd2, 2'd2}: piece_shape = 16'h0270;
+                {3'd2, 2'd3}: piece_shape = 16'h0131;
 
-                {3'd3, 2'd0}: piece_shape = 16'h00C6;
-                {3'd3, 2'd1}: piece_shape = 16'h0264;
-                {3'd3, 2'd2}: piece_shape = 16'h00C6;
-                {3'd3, 2'd3}: piece_shape = 16'h0264;
+                {3'd3, 2'd0}: piece_shape = 16'h0063;
+                {3'd3, 2'd1}: piece_shape = 16'h0132;
+                {3'd3, 2'd2}: piece_shape = 16'h0063;
+                {3'd3, 2'd3}: piece_shape = 16'h0132;
 
-                {3'd4, 2'd0}: piece_shape = 16'h006C;
-                {3'd4, 2'd1}: piece_shape = 16'h0462;
-                {3'd4, 2'd2}: piece_shape = 16'h006C;
-                {3'd4, 2'd3}: piece_shape = 16'h0462;
+                {3'd4, 2'd0}: piece_shape = 16'h0036;
+                {3'd4, 2'd1}: piece_shape = 16'h0231;
+                {3'd4, 2'd2}: piece_shape = 16'h0036;
+                {3'd4, 2'd3}: piece_shape = 16'h0231;
 
-                {3'd5, 2'd0}: piece_shape = 16'h00E8;
-                {3'd5, 2'd1}: piece_shape = 16'h0446;
-                {3'd5, 2'd2}: piece_shape = 16'h02E0;
-                {3'd5, 2'd3}: piece_shape = 16'h0C44;
+                {3'd5, 2'd0}: piece_shape = 16'h0074;
+                {3'd5, 2'd1}: piece_shape = 16'h0223;
+                {3'd5, 2'd2}: piece_shape = 16'h0170;
+                {3'd5, 2'd3}: piece_shape = 16'h0311;
 
-                {3'd6, 2'd0}: piece_shape = 16'h00E2;
-                {3'd6, 2'd1}: piece_shape = 16'h0644;
-                {3'd6, 2'd2}: piece_shape = 16'h08E0;
-                {3'd6, 2'd3}: piece_shape = 16'h044C;
+                {3'd6, 2'd0}: piece_shape = 16'h0071;
+                {3'd6, 2'd1}: piece_shape = 16'h0322;
+                {3'd6, 2'd2}: piece_shape = 16'h0470;
+                {3'd6, 2'd3}: piece_shape = 16'h0113;
                 default: piece_shape = 16'h0000;
             endcase
         end
@@ -322,26 +322,7 @@ module slot2_game_core (
 
                         if (hard_drop) begin
                             state <= ST_HARD_DROP;
-                        end else if (gravity_tick || soft_drop) begin
-                            if (!collision(cur_x, {1'b0, cur_y} + 7'd1, cur_rot, cur_type)) begin
-                                cur_y <= cur_y + 6'd1;
-                                ghost_y_reg <= cur_y + 6'd1;
-                            end else begin
-                                board_reg <= lock_to_board(board_reg, cur_x, {1'b0, cur_y}, cur_rot, cur_type);
-                                lock_pulse <= 1'b1;
-                                state <= ST_CLEAR_ANIM;
-                                clear_delay <= 5'd20;
-                            end
                         end else begin
-                            if (move_left && !collision(cur_x - 4'd1, {1'b0, cur_y}, cur_rot, cur_type)) begin
-                                cur_x <= cur_x - 4'd1;
-                                ghost_y_reg <= cur_y;
-                            end
-                            if (move_right && !collision(cur_x + 4'd1, {1'b0, cur_y}, cur_rot, cur_type)) begin
-                                cur_x <= cur_x + 4'd1;
-                                ghost_y_reg <= cur_y;
-                            end
-
                             if (rotate_cw) begin
                                 if (!collision(cur_x, {1'b0, cur_y}, cur_rot + 2'd1, cur_type)) begin
                                     cur_rot <= cur_rot + 2'd1;
@@ -354,10 +335,44 @@ module slot2_game_core (
                                     cur_rot <= cur_rot + 2'd1;
                                     cur_x <= cur_x + 4'd1;
                                     ghost_y_reg <= cur_y;
+                                end else if (!collision(cur_x - 4'd2, {1'b0, cur_y}, cur_rot + 2'd1, cur_type)) begin
+                                    cur_rot <= cur_rot + 2'd1;
+                                    cur_x <= cur_x - 4'd2;
+                                    ghost_y_reg <= cur_y;
+                                end else if (!collision(cur_x + 4'd2, {1'b0, cur_y}, cur_rot + 2'd1, cur_type)) begin
+                                    cur_rot <= cur_rot + 2'd1;
+                                    cur_x <= cur_x + 4'd2;
+                                    ghost_y_reg <= cur_y;
+                                end else if (!collision(cur_x - 4'd3, {1'b0, cur_y}, cur_rot + 2'd1, cur_type)) begin
+                                    cur_rot <= cur_rot + 2'd1;
+                                    cur_x <= cur_x - 4'd3;
+                                    ghost_y_reg <= cur_y;
+                                end else if (!collision(cur_x + 4'd3, {1'b0, cur_y}, cur_rot + 2'd1, cur_type)) begin
+                                    cur_rot <= cur_rot + 2'd1;
+                                    cur_x <= cur_x + 4'd3;
+                                    ghost_y_reg <= cur_y;
                                 end else if (cur_y > 6'd0 && !collision(cur_x, {1'b0, cur_y} - 7'd1, cur_rot + 2'd1, cur_type)) begin
                                     cur_rot <= cur_rot + 2'd1;
                                     cur_y <= cur_y - 6'd1;
                                     ghost_y_reg <= cur_y - 6'd1;
+                                end
+                            end else if (move_left && !move_right &&
+                                         !collision(cur_x - 4'd1, {1'b0, cur_y}, cur_rot, cur_type)) begin
+                                cur_x <= cur_x - 4'd1;
+                                ghost_y_reg <= cur_y;
+                            end else if (move_right && !move_left &&
+                                         !collision(cur_x + 4'd1, {1'b0, cur_y}, cur_rot, cur_type)) begin
+                                cur_x <= cur_x + 4'd1;
+                                ghost_y_reg <= cur_y;
+                            end else if (gravity_tick || soft_drop) begin
+                                if (!collision(cur_x, {1'b0, cur_y} + 7'd1, cur_rot, cur_type)) begin
+                                    cur_y <= cur_y + 6'd1;
+                                    ghost_y_reg <= cur_y + 6'd1;
+                                end else begin
+                                    board_reg <= lock_to_board(board_reg, cur_x, {1'b0, cur_y}, cur_rot, cur_type);
+                                    lock_pulse <= 1'b1;
+                                    state <= ST_CLEAR_ANIM;
+                                    clear_delay <= 5'd20;
                                 end
                             end
                         end
