@@ -178,6 +178,57 @@ module slot3_msg_lut (
                     4'd3: char_idx = 5'd11; // L
                     default: char_idx = 5'd31;
                 endcase
+            4'd15: // "AMMO"
+                case (char_pos)
+                    4'd0: char_idx = 5'd0;  // A
+                    4'd1: char_idx = 5'd12; // M
+                    4'd2: char_idx = 5'd12; // M
+                    4'd3: char_idx = 5'd14; // O
+                    default: char_idx = 5'd31;
+                endcase
+            4'd16: // "CHARGE"
+                case (char_pos)
+                    4'd0: char_idx = 5'd2;  // C
+                    4'd1: char_idx = 5'd7;  // H
+                    4'd2: char_idx = 5'd0;  // A
+                    4'd3: char_idx = 5'd17; // R
+                    4'd4: char_idx = 5'd6;  // G
+                    4'd5: char_idx = 5'd4;  // E
+                    default: char_idx = 5'd31;
+                endcase
+            4'd17: // "EMP"
+                case (char_pos)
+                    4'd0: char_idx = 5'd4;  // E
+                    4'd1: char_idx = 5'd12; // M
+                    4'd2: char_idx = 5'd15; // P
+                    default: char_idx = 5'd31;
+                endcase
+            4'd18: // "RESCUE"
+                case (char_pos)
+                    4'd0: char_idx = 5'd17; // R
+                    4'd1: char_idx = 5'd4;  // E
+                    4'd2: char_idx = 5'd18; // S
+                    4'd3: char_idx = 5'd2;  // C
+                    4'd4: char_idx = 5'd20; // U
+                    4'd5: char_idx = 5'd4;  // E
+                    default: char_idx = 5'd31;
+                endcase
+            4'd19: // "GOAL"
+                case (char_pos)
+                    4'd0: char_idx = 5'd6;  // G
+                    4'd1: char_idx = 5'd14; // O
+                    4'd2: char_idx = 5'd0;  // A
+                    4'd3: char_idx = 5'd11; // L
+                    default: char_idx = 5'd31;
+                endcase
+            4'd20: // "BOMB"
+                case (char_pos)
+                    4'd0: char_idx = 5'd1;  // B
+                    4'd1: char_idx = 5'd14; // O
+                    4'd2: char_idx = 5'd12; // M
+                    4'd3: char_idx = 5'd1;  // B
+                    default: char_idx = 5'd31;
+                endcase
             default: char_idx = 5'd31;
         endcase
     end

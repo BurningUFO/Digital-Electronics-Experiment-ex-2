@@ -37,7 +37,7 @@ module game_slot2_top (
     wire [199:0] board;
     wire [2:0]  piece_type, next_type;
     wire [1:0]  piece_rotation;
-    wire [3:0]  piece_x;
+    wire signed [4:0] piece_x;
     wire [5:0]  piece_y, ghost_piece_y;
     wire [15:0] score;
     wire [9:0]  lines;
@@ -58,6 +58,7 @@ module game_slot2_top (
         .clk(clk), .reset(reset),
         .selected(selected),
         .frame_tick(frame_tick),
+        .ps2_clk(ps2_clk), .ps2_data(ps2_data),
         .btn_l(btn_l), .btn_r(btn_r),
         .btn_d(btn_d), .btn_u(btn_u), .btn_c(btn_c),
         .ps2_clk(ps2_clk), .ps2_data(ps2_data),

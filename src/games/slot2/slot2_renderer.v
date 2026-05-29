@@ -8,7 +8,7 @@ module slot2_renderer (
     input  wire [199:0] board,
     input  wire [2:0]  piece_type,
     input  wire [1:0]  piece_rotation,
-    input  wire [3:0]  piece_x,
+    input  wire signed [4:0] piece_x,
     input  wire [5:0]  piece_y,
     input  wire [5:0]  ghost_piece_y,
     input  wire [2:0]  next_type,
@@ -24,6 +24,135 @@ module slot2_renderer (
     localparam BX = 40;
     localparam BY = 40;
     localparam CS = 20;
+
+    reg [15:0] score_sample;
+    reg [15:0] score_work;
+    reg [9:0]  lines_sample;
+    reg [9:0]  lines_work;
+    reg [3:0]  level_sample;
+    reg [3:0]  level_work;
+    reg [3:0]  bcd_state;
+    reg [3:0]  score5;
+    reg [3:0]  score4;
+    reg [3:0]  score3;
+    reg [3:0]  score2;
+    reg [3:0]  score1;
+    reg [3:0]  score0;
+    reg [3:0]  lines2;
+    reg [3:0]  lines1;
+    reg [3:0]  lines0;
+    reg [3:0]  lvl1;
+    reg [3:0]  lvl0;
+
+    always @(posedge clk) begin
+        if (reset) begin
+            score_sample <= 16'd0;
+            score_work <= 16'd0;
+            lines_sample <= 10'd0;
+            lines_work <= 10'd0;
+            level_sample <= 4'd0;
+            level_work <= 4'd0;
+            bcd_state <= 4'd0;
+            score5 <= 4'd0;
+            score4 <= 4'd0;
+            score3 <= 4'd0;
+            score2 <= 4'd0;
+            score1 <= 4'd0;
+            score0 <= 4'd0;
+            lines2 <= 4'd0;
+            lines1 <= 4'd0;
+            lines0 <= 4'd0;
+            lvl1 <= 4'd0;
+            lvl0 <= 4'd0;
+        end else begin
+            case (bcd_state)
+                4'd0: begin
+                    if ((score_sample != score) ||
+                        (lines_sample != lines) ||
+                        (level_sample != level)) begin
+                        score_sample <= score;
+                        score_work <= score;
+                        lines_sample <= lines;
+                        lines_work <= lines;
+                        level_sample <= level;
+                        level_work <= level;
+                        score5 <= 4'd0;
+                        score4 <= 4'd0;
+                        score3 <= 4'd0;
+                        score2 <= 4'd0;
+                        score1 <= 4'd0;
+                        score0 <= 4'd0;
+                        lines2 <= 4'd0;
+                        lines1 <= 4'd0;
+                        lines0 <= 4'd0;
+                        lvl1 <= 4'd0;
+                        lvl0 <= 4'd0;
+                        bcd_state <= 4'd1;
+                    end
+                end
+                4'd1: begin
+                    if (score_work >= 16'd10000) begin
+                        score_work <= score_work - 16'd10000;
+                        score4 <= score4 + 4'd1;
+                    end else begin
+                        bcd_state <= 4'd2;
+                    end
+                end
+                4'd2: begin
+                    if (score_work >= 16'd1000) begin
+                        score_work <= score_work - 16'd1000;
+                        score3 <= score3 + 4'd1;
+                    end else begin
+                        bcd_state <= 4'd3;
+                    end
+                end
+                4'd3: begin
+                    if (score_work >= 16'd100) begin
+                        score_work <= score_work - 16'd100;
+                        score2 <= score2 + 4'd1;
+                    end else begin
+                        bcd_state <= 4'd4;
+                    end
+                end
+                4'd4: begin
+                    if (score_work >= 16'd10) begin
+                        score_work <= score_work - 16'd10;
+                        score1 <= score1 + 4'd1;
+                    end else begin
+                        score0 <= score_work[3:0];
+                        bcd_state <= 4'd5;
+                    end
+                end
+                4'd5: begin
+                    if (lines_work >= 10'd100) begin
+                        lines_work <= lines_work - 10'd100;
+                        lines2 <= lines2 + 4'd1;
+                    end else begin
+                        bcd_state <= 4'd6;
+                    end
+                end
+                4'd6: begin
+                    if (lines_work >= 10'd10) begin
+                        lines_work <= lines_work - 10'd10;
+                        lines1 <= lines1 + 4'd1;
+                    end else begin
+                        lines0 <= lines_work[3:0];
+                        bcd_state <= 4'd7;
+                    end
+                end
+                4'd7: begin
+                    if (level_work >= 4'd10) begin
+                        level_work <= level_work - 4'd10;
+                        lvl1 <= lvl1 + 4'd1;
+                    end else begin
+                        lvl0 <= level_work;
+                        bcd_state <= 4'd0;
+                    end
+                end
+                default: bcd_state <= 4'd0;
+            endcase
+        end
+    end
 
     // ======== character ROM (8x8 glyphs) ========
     function [7:0] glyph_row;
@@ -146,79 +275,6 @@ module slot2_renderer (
         end
     endfunction
 
-    // binary digit extraction
-    function [3:0] digit;
-        input [15:0] val;
-        input [3:0] pos;
-        reg [15:0] v;
-        reg [3:0] d;
-        begin
-            v = val; d = 4'd0;
-            // count 10000s (0-6)
-            if (v >= 10000) begin d=d+1; v=v-10000; end
-            if (v >= 10000) begin d=d+1; v=v-10000; end
-            if (v >= 10000) begin d=d+1; v=v-10000; end
-            if (v >= 10000) begin d=d+1; v=v-10000; end
-            if (v >= 10000) begin d=d+1; v=v-10000; end
-            if (v >= 10000) begin d=d+1; v=v-10000; end
-            if (pos == 4) digit = d;
-
-            d = 4'd0;
-            if (v >= 1000) begin d=d+1; v=v-1000; end
-            if (v >= 1000) begin d=d+1; v=v-1000; end
-            if (v >= 1000) begin d=d+1; v=v-1000; end
-            if (v >= 1000) begin d=d+1; v=v-1000; end
-            if (v >= 1000) begin d=d+1; v=v-1000; end
-            if (v >= 1000) begin d=d+1; v=v-1000; end
-            if (v >= 1000) begin d=d+1; v=v-1000; end
-            if (v >= 1000) begin d=d+1; v=v-1000; end
-            if (v >= 1000) begin d=d+1; v=v-1000; end
-            if (pos == 3) digit = d;
-
-            d = 4'd0;
-            if (v >= 100) begin d=d+1; v=v-100; end
-            if (v >= 100) begin d=d+1; v=v-100; end
-            if (v >= 100) begin d=d+1; v=v-100; end
-            if (v >= 100) begin d=d+1; v=v-100; end
-            if (v >= 100) begin d=d+1; v=v-100; end
-            if (v >= 100) begin d=d+1; v=v-100; end
-            if (v >= 100) begin d=d+1; v=v-100; end
-            if (v >= 100) begin d=d+1; v=v-100; end
-            if (v >= 100) begin d=d+1; v=v-100; end
-            if (pos == 2) digit = d;
-
-            d = 4'd0;
-            if (v >= 10) begin d=d+1; v=v-10; end
-            if (v >= 10) begin d=d+1; v=v-10; end
-            if (v >= 10) begin d=d+1; v=v-10; end
-            if (v >= 10) begin d=d+1; v=v-10; end
-            if (v >= 10) begin d=d+1; v=v-10; end
-            if (v >= 10) begin d=d+1; v=v-10; end
-            if (v >= 10) begin d=d+1; v=v-10; end
-            if (v >= 10) begin d=d+1; v=v-10; end
-            if (v >= 10) begin d=d+1; v=v-10; end
-            if (pos == 1) digit = d;
-
-            if (pos == 0) digit = v[3:0];
-            if (pos > 4) digit = 4'd0;
-        end
-    endfunction
-
-    // computed digit wires
-    wire [3:0] score5 = digit(score, 4'd5);
-    wire [3:0] score4 = digit(score, 4'd4);
-    wire [3:0] score3 = digit(score, 4'd3);
-    wire [3:0] score2 = digit(score, 4'd2);
-    wire [3:0] score1 = digit(score, 4'd1);
-    wire [3:0] score0 = digit(score, 4'd0);
-
-    wire [3:0] lines2 = digit({6'd0, lines}, 4'd2);
-    wire [3:0] lines1 = digit({6'd0, lines}, 4'd1);
-    wire [3:0] lines0 = digit({6'd0, lines}, 4'd0);
-
-    wire [3:0] lvl1 = digit({12'd0, level}, 4'd1);
-    wire [3:0] lvl0 = digit({12'd0, level}, 4'd0);
-
     function [7:0] d2c;
         input [3:0] d;
         begin
@@ -230,20 +286,63 @@ module slot2_renderer (
     wire in_board;
     wire [9:0] bx, by;
     wire [4:0] cell_x, cell_y;
+    wire [4:0] cell_px, cell_py;
     wire [9:0] board_idx;
     wire placed;
     wire [11:0] pc_color;
+    wire in_next_box;
+    wire [9:0] next_bx, next_by;
+    wire [4:0] next_cell_x, next_cell_y;
 
     assign in_board = (pixel_x >= BX) && (pixel_x < BX + 10*CS) &&
                       (pixel_y >= BY) && (pixel_y < BY + 20*CS);
     assign bx = pixel_x - BX;
     assign by = pixel_y - BY;
-    assign cell_x = bx[9:0] / CS;
-    assign cell_y = by[9:0] / CS;
+    assign cell_x = (bx < 10'd20)  ? 5'd0 :
+                    (bx < 10'd40)  ? 5'd1 :
+                    (bx < 10'd60)  ? 5'd2 :
+                    (bx < 10'd80)  ? 5'd3 :
+                    (bx < 10'd100) ? 5'd4 :
+                    (bx < 10'd120) ? 5'd5 :
+                    (bx < 10'd140) ? 5'd6 :
+                    (bx < 10'd160) ? 5'd7 :
+                    (bx < 10'd180) ? 5'd8 : 5'd9;
+    assign cell_y = (by < 10'd20)  ? 5'd0 :
+                    (by < 10'd40)  ? 5'd1 :
+                    (by < 10'd60)  ? 5'd2 :
+                    (by < 10'd80)  ? 5'd3 :
+                    (by < 10'd100) ? 5'd4 :
+                    (by < 10'd120) ? 5'd5 :
+                    (by < 10'd140) ? 5'd6 :
+                    (by < 10'd160) ? 5'd7 :
+                    (by < 10'd180) ? 5'd8 :
+                    (by < 10'd200) ? 5'd9 :
+                    (by < 10'd220) ? 5'd10 :
+                    (by < 10'd240) ? 5'd11 :
+                    (by < 10'd260) ? 5'd12 :
+                    (by < 10'd280) ? 5'd13 :
+                    (by < 10'd300) ? 5'd14 :
+                    (by < 10'd320) ? 5'd15 :
+                    (by < 10'd340) ? 5'd16 :
+                    (by < 10'd360) ? 5'd17 :
+                    (by < 10'd380) ? 5'd18 : 5'd19;
+    assign cell_px = bx - (cell_x * 5'd20);
+    assign cell_py = by - (cell_y * 5'd20);
     assign board_idx = cell_y * 5'd10 + {6'd0, cell_x};
     assign placed = (cell_x < 5'd10 && cell_y < 6'd20) ? board[board_idx] : 1'b0;
 
     assign pc_color = piece_rgb(piece_type);
+
+    assign in_next_box = (pixel_x >= 10'd300) && (pixel_x < 10'd380) &&
+                         (pixel_y >= 10'd75) && (pixel_y < 10'd155);
+    assign next_bx = pixel_x - 10'd300;
+    assign next_by = pixel_y - 10'd75;
+    assign next_cell_x = (next_bx < 10'd20) ? 5'd0 :
+                         (next_bx < 10'd40) ? 5'd1 :
+                         (next_bx < 10'd60) ? 5'd2 : 5'd3;
+    assign next_cell_y = (next_by < 10'd20) ? 5'd0 :
+                         (next_by < 10'd40) ? 5'd1 :
+                         (next_by < 10'd60) ? 5'd2 : 5'd3;
 
     // piece rendering helpers
     function piece_block_on;
@@ -251,17 +350,19 @@ module slot2_renderer (
         input [5:0] cy;
         input [2:0] pt;
         input [1:0] pr;
-        input [3:0] pxo;
+        input signed [4:0] pxo;
         input [5:0] pyo;
         integer ri, ci;
         reg [15:0] ps;
+        reg signed [5:0] block_x;
         begin
             ps = piece_shape(pt, pr);
             piece_block_on = 1'b0;
             for (ri = 0; ri < 4; ri = ri + 1) begin
                 for (ci = 0; ci < 4; ci = ci + 1) begin
                     if (ps[ri*4 + ci]) begin
-                        if (cx == (pxo + ci[3:0]) && cy == (pyo + ri[1:0]))
+                        block_x = pxo + ci;
+                        if (block_x >= 0 && block_x < 10 && cx == block_x[4:0] && cy == (pyo + ri[1:0]))
                             piece_block_on = 1'b1;
                     end
                 end
@@ -284,7 +385,7 @@ module slot2_renderer (
                 vga_r = 4'h0; vga_g = 4'h0; vga_b = 4'h2;
 
                 // grid
-                if ((bx % CS == 0) || (by % CS == 0)) begin
+                if ((cell_px == 5'd0) || (cell_py == 5'd0)) begin
                     vga_r = 4'h1; vga_g = 4'h1; vga_b = 4'h3;
                 end
 
@@ -296,10 +397,10 @@ module slot2_renderer (
                 // placed blocks
                 if (placed) begin
                     vga_r = 4'h8; vga_g = 4'h8; vga_b = 4'h9;
-                    if ((bx % CS) < 2 || (by % CS) < 2) begin
+                    if ((cell_px < 5'd2) || (cell_py < 5'd2)) begin
                         vga_r = 4'hA; vga_g = 4'hA; vga_b = 4'hB;
                     end
-                    if ((bx % CS) >= CS-2 || (by % CS) >= CS-2) begin
+                    if ((cell_px >= 5'd18) || (cell_py >= 5'd18)) begin
                         vga_r = 4'h5; vga_g = 4'h5; vga_b = 4'h6;
                     end
                 end
@@ -316,7 +417,7 @@ module slot2_renderer (
                     vga_r = pc_color[11:8];
                     vga_g = pc_color[7:4];
                     vga_b = pc_color[3:0];
-                    if ((bx % CS) < 3 || (by % CS) < 3) begin
+                    if ((cell_px < 5'd3) || (cell_py < 5'd3)) begin
                         if (vga_r < 4'hC) vga_r = vga_r + 4'h3; else vga_r = 4'hF;
                         if (vga_g < 4'hC) vga_g = vga_g + 4'h3; else vga_g = 4'hF;
                         if (vga_b < 4'hC) vga_b = vga_b + 4'h3; else vga_b = 4'hF;
@@ -334,9 +435,9 @@ module slot2_renderer (
             end
 
             // next piece preview box at (300, 75), 80x80 pixels = 4x4 cells
-            if (pixel_x >= 10'd300 && pixel_x < 10'd380 && pixel_y >= 10'd75 && pixel_y < 10'd155) begin
+            if (in_next_box) begin
                 vga_r = 4'h1; vga_g = 4'h1; vga_b = 4'h3;
-                if (!game_over && piece_block_on((pixel_x-10'd300)/CS, (pixel_y-10'd75)/CS, next_type, 2'd0, 4'd0, 6'd0)) begin
+                if (!game_over && piece_block_on(next_cell_x, next_cell_y, next_type, 2'd0, 5'sd0, 6'd0)) begin
                     {vga_r,vga_g,vga_b} = piece_rgb(next_type);
                 end
             end

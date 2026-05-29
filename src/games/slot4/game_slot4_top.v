@@ -38,8 +38,10 @@ module game_slot4_top (
     localparam integer PLAYER_H = 18;
     localparam signed [5:0] GRAVITY = 6'sd1;
     localparam signed [5:0] MAX_FALL = 6'sd8;
-    localparam signed [5:0] JUMP_VEL = -6'sd12;
+    localparam signed [5:0] JUMP_VEL = -6'sd16;
     localparam integer MOVE_STEP = 3;
+    localparam integer COLLIDE_INSET_X = 2;
+    localparam integer COLLIDE_INSET_Y = 2;
 
     localparam [3:0] TILE_EMPTY      = 4'd0;
     localparam [3:0] TILE_WALL       = 4'd1;
@@ -61,6 +63,7 @@ module game_slot4_top (
     wire water_left_key;
     wire water_right_key;
     wire water_jump_key;
+    wire water_down_key;
 
     reg [1:0] level;
     reg won;
@@ -78,6 +81,8 @@ module game_slot4_top (
 
     reg btn_u_sync0;
     reg btn_u_sync1;
+    reg btn_d_sync0;
+    reg btn_d_sync1;
     reg btn_l_sync0;
     reg btn_l_sync1;
     reg btn_r_sync0;
@@ -92,6 +97,7 @@ module game_slot4_top (
     reg sw2_sync1;
 
     reg btn_u_q;
+    reg btn_d_q;
     reg btn_l_q;
     reg btn_r_q;
     reg btn_c_q;
@@ -101,6 +107,7 @@ module game_slot4_top (
     reg water_left_key_q;
     reg water_right_key_q;
     reg water_jump_key_q;
+    reg water_down_key_q;
     reg sw0_q;
     reg sw1_q;
     reg sw2_q;
@@ -137,6 +144,7 @@ module game_slot4_top (
     wire water_left_cmd;
     wire water_right_cmd;
     wire water_jump_cmd;
+    wire water_down_cmd;
     wire fire_pixel;
     wire water_pixel;
     wire fire_eye;
@@ -158,17 +166,18 @@ module game_slot4_top (
                        (level == 2'd1) ? button_mask[0] :
                                          (button_mask[0] | button_mask[1]);
     assign gate_open = gate_open_q;
-    assign fire_grounded_now = slot4_player_solid(level, fire_x, fire_y + 10'd1, gate_open_now);
-    assign water_grounded_now = slot4_player_solid(level, water_x, water_y + 10'd1, gate_open_now);
+    assign fire_grounded_now = slot4_player_grounded(level, fire_x, fire_y, gate_open_now);
+    assign water_grounded_now = slot4_player_grounded(level, water_x, water_y, gate_open_now);
     assign fire_grounded = fire_grounded_q;
     assign water_grounded = water_grounded_q;
 
     assign fire_left_cmd = fire_left_key_q | btn_l_q;
     assign fire_right_cmd = fire_right_key_q | btn_r_q;
     assign fire_jump_cmd = fire_jump_key_q | btn_u_q;
-    assign water_left_cmd = water_left_key_q | sw0_q;
-    assign water_right_cmd = water_right_key_q | sw1_q;
-    assign water_jump_cmd = water_jump_key_q | sw2_q;
+    assign water_left_cmd = water_left_key_q | btn_l_q | sw0_q;
+    assign water_right_cmd = water_right_key_q | btn_r_q | sw1_q;
+    assign water_jump_cmd = water_jump_key_q | btn_u_q | sw2_q;
+    assign water_down_cmd = water_down_key_q | btn_d_q;
 
     assign fire_all_gems = (fire_gems[1:0] == 2'b11);
     assign water_all_gems = (water_gems[1:0] == 2'b11);
@@ -218,7 +227,8 @@ module game_slot4_top (
         .fire_jump(fire_jump_key),
         .water_left(water_left_key),
         .water_right(water_right_key),
-        .water_jump(water_jump_key)
+        .water_jump(water_jump_key),
+        .water_down(water_down_key)
     );
 
     function [9:0] slot4_fire_start_x;
@@ -463,6 +473,46 @@ module game_slot4_top (
         end
     endfunction
 
+    function slot4_player_solid_x;
+        input [1:0] lvl;
+        input [9:0] px;
+        input [9:0] py;
+        input open_gate;
+        begin
+            slot4_player_solid_x =
+                slot4_solid_at(lvl, px, py + COLLIDE_INSET_Y, open_gate) ||
+                slot4_solid_at(lvl, px + PLAYER_W - 1, py + COLLIDE_INSET_Y, open_gate) ||
+                slot4_solid_at(lvl, px, py + PLAYER_H - 1 - COLLIDE_INSET_Y, open_gate) ||
+                slot4_solid_at(lvl, px + PLAYER_W - 1, py + PLAYER_H - 1 - COLLIDE_INSET_Y, open_gate);
+        end
+    endfunction
+
+    function slot4_player_solid_y;
+        input [1:0] lvl;
+        input [9:0] px;
+        input [9:0] py;
+        input open_gate;
+        begin
+            slot4_player_solid_y =
+                slot4_solid_at(lvl, px + COLLIDE_INSET_X, py, open_gate) ||
+                slot4_solid_at(lvl, px + PLAYER_W - 1 - COLLIDE_INSET_X, py, open_gate) ||
+                slot4_solid_at(lvl, px + COLLIDE_INSET_X, py + PLAYER_H - 1, open_gate) ||
+                slot4_solid_at(lvl, px + PLAYER_W - 1 - COLLIDE_INSET_X, py + PLAYER_H - 1, open_gate);
+        end
+    endfunction
+
+    function slot4_player_grounded;
+        input [1:0] lvl;
+        input [9:0] px;
+        input [9:0] py;
+        input open_gate;
+        begin
+            slot4_player_grounded =
+                slot4_solid_at(lvl, px + COLLIDE_INSET_X, py + PLAYER_H, open_gate) ||
+                slot4_solid_at(lvl, px + PLAYER_W - 1 - COLLIDE_INSET_X, py + PLAYER_H, open_gate);
+        end
+    endfunction
+
     function slot4_player_touch_tile;
         input [1:0] lvl;
         input [9:0] px;
@@ -693,6 +743,8 @@ module game_slot4_top (
             frame_tick_q <= 1'b0;
             btn_u_sync0 <= 1'b0;
             btn_u_sync1 <= 1'b0;
+            btn_d_sync0 <= 1'b0;
+            btn_d_sync1 <= 1'b0;
             btn_l_sync0 <= 1'b0;
             btn_l_sync1 <= 1'b0;
             btn_r_sync0 <= 1'b0;
@@ -706,6 +758,7 @@ module game_slot4_top (
             sw2_sync0 <= 1'b0;
             sw2_sync1 <= 1'b0;
             btn_u_q <= 1'b0;
+            btn_d_q <= 1'b0;
             btn_l_q <= 1'b0;
             btn_r_q <= 1'b0;
             btn_c_q <= 1'b0;
@@ -715,6 +768,7 @@ module game_slot4_top (
             water_left_key_q <= 1'b0;
             water_right_key_q <= 1'b0;
             water_jump_key_q <= 1'b0;
+            water_down_key_q <= 1'b0;
             sw0_q <= 1'b0;
             sw1_q <= 1'b0;
             sw2_q <= 1'b0;
@@ -742,6 +796,8 @@ module game_slot4_top (
             frame_tick_q <= frame_tick;
             btn_u_sync0 <= btn_u;
             btn_u_sync1 <= btn_u_sync0;
+            btn_d_sync0 <= btn_d;
+            btn_d_sync1 <= btn_d_sync0;
             btn_l_sync0 <= btn_l;
             btn_l_sync1 <= btn_l_sync0;
             btn_r_sync0 <= btn_r;
@@ -757,6 +813,7 @@ module game_slot4_top (
 
             if (frame_tick) begin
                 btn_u_q <= btn_u_sync1;
+                btn_d_q <= btn_d_sync1;
                 btn_l_q <= btn_l_sync1;
                 btn_r_q <= btn_r_sync1;
                 btn_c_q <= btn_c_sync1;
@@ -766,6 +823,7 @@ module game_slot4_top (
                 water_left_key_q <= water_left_key;
                 water_right_key_q <= water_right_key;
                 water_jump_key_q <= water_jump_key;
+                water_down_key_q <= water_down_key;
                 sw0_q <= sw0_sync1;
                 sw1_q <= sw1_sync1;
                 sw2_q <= sw2_sync1;
@@ -834,7 +892,7 @@ module game_slot4_top (
                                           SCREEN_W - PLAYER_W - 1;
                         end
 
-                        if (!slot4_player_solid(level, fire_x_calc, fire_y, gate_open_q))
+                        if (!slot4_player_solid_x(level, fire_x_calc, fire_y, gate_open_q))
                             fire_x <= fire_x_calc;
 
                         water_x_calc = water_x;
@@ -846,7 +904,7 @@ module game_slot4_top (
                                            SCREEN_W - PLAYER_W - 1;
                         end
 
-                        if (!slot4_player_solid(level, water_x_calc, water_y, gate_open_q))
+                        if (!slot4_player_solid_x(level, water_x_calc, water_y, gate_open_q))
                             water_x <= water_x_calc;
 
                         fire_vy_calc = fire_vy;
@@ -863,7 +921,7 @@ module game_slot4_top (
                         end else if (fire_y_calc > SCREEN_H - PLAYER_H - 1) begin
                             fire_y <= SCREEN_H - PLAYER_H - 1;
                             fire_vy <= 6'sd0;
-                        end else if (!slot4_player_solid(level, fire_x, fire_y_calc[9:0], gate_open_q)) begin
+                        end else if (!slot4_player_solid_y(level, fire_x, fire_y_calc[9:0], gate_open_q)) begin
                             fire_y <= fire_y_calc[9:0];
                             fire_vy <= fire_vy_calc;
                         end else begin
@@ -875,6 +933,8 @@ module game_slot4_top (
                             water_vy_calc = JUMP_VEL;
                         end else if (water_vy < MAX_FALL) begin
                             water_vy_calc = water_vy + GRAVITY;
+                            if (water_down_cmd && water_vy_calc < MAX_FALL)
+                                water_vy_calc = water_vy_calc + GRAVITY;
                         end
 
                         water_y_calc = $signed({2'b00, water_y}) + {{6{water_vy_calc[5]}}, water_vy_calc};
@@ -884,7 +944,7 @@ module game_slot4_top (
                         end else if (water_y_calc > SCREEN_H - PLAYER_H - 1) begin
                             water_y <= SCREEN_H - PLAYER_H - 1;
                             water_vy <= 6'sd0;
-                        end else if (!slot4_player_solid(level, water_x, water_y_calc[9:0], gate_open_q)) begin
+                        end else if (!slot4_player_solid_y(level, water_x, water_y_calc[9:0], gate_open_q)) begin
                             water_y <= water_y_calc[9:0];
                             water_vy <= water_vy_calc;
                         end else begin
@@ -1153,15 +1213,18 @@ module slot4_keyboard_mapper (
     output reg        fire_jump,
     output reg        water_left,
     output reg        water_right,
-    output reg        water_jump
+    output reg        water_jump,
+    output reg        water_down
 );
 
     localparam [7:0] SCAN_F0    = 8'hF0;
     localparam [7:0] SCAN_E0    = 8'hE0;
     localparam [7:0] SCAN_W     = 8'h1D;
     localparam [7:0] SCAN_A     = 8'h1C;
+    localparam [7:0] SCAN_S     = 8'h1B;
     localparam [7:0] SCAN_D     = 8'h23;
     localparam [7:0] SCAN_UP    = 8'h75;
+    localparam [7:0] SCAN_DOWN  = 8'h72;
     localparam [7:0] SCAN_LEFT  = 8'h6B;
     localparam [7:0] SCAN_RIGHT = 8'h74;
 
@@ -1176,6 +1239,7 @@ module slot4_keyboard_mapper (
             water_left <= 1'b0;
             water_right <= 1'b0;
             water_jump <= 1'b0;
+            water_down <= 1'b0;
             break_pending <= 1'b0;
             extend_pending <= 1'b0;
         end else if (byte_ready) begin
@@ -1184,21 +1248,17 @@ module slot4_keyboard_mapper (
             end else if (byte_data == SCAN_E0) begin
                 extend_pending <= 1'b1;
             end else begin
-                if (extend_pending) begin
-                    case (byte_data)
-                        SCAN_LEFT:  water_left  <= ~break_pending;
-                        SCAN_RIGHT: water_right <= ~break_pending;
-                        SCAN_UP:    water_jump  <= ~break_pending;
-                        default: begin end
-                    endcase
-                end else begin
-                    case (byte_data)
-                        SCAN_A: fire_left  <= ~break_pending;
-                        SCAN_D: fire_right <= ~break_pending;
-                        SCAN_W: fire_jump  <= ~break_pending;
-                        default: begin end
-                    endcase
-                end
+                case (byte_data)
+                    SCAN_A: fire_left  <= ~break_pending;
+                    SCAN_D: fire_right <= ~break_pending;
+                    SCAN_W: fire_jump  <= ~break_pending;
+                    SCAN_S: water_down <= ~break_pending;
+                    SCAN_LEFT:  water_left  <= ~break_pending;
+                    SCAN_RIGHT: water_right <= ~break_pending;
+                    SCAN_UP:    water_jump  <= ~break_pending;
+                    SCAN_DOWN: water_down <= ~break_pending;
+                    default: begin end
+                endcase
 
                 break_pending <= 1'b0;
                 extend_pending <= 1'b0;

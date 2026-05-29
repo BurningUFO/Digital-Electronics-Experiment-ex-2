@@ -12,7 +12,7 @@ module slot2_game_core (
     output wire [199:0] board,
     output wire [2:0]  piece_type,
     output wire [1:0]  piece_rotation,
-    output wire [3:0]  piece_x,
+    output wire signed [4:0] piece_x,
     output wire [5:0]  piece_y,
     output wire [2:0]  next_type,
     output wire [15:0] score,
@@ -41,7 +41,7 @@ module slot2_game_core (
     reg [199:0] compact_reg;
     reg [2:0] cur_type;
     reg [1:0] cur_rot;
-    reg [3:0] cur_x;
+    reg signed [4:0] cur_x;
     reg [5:0] cur_y;
     reg [5:0] ghost_y_reg;
     reg [2:0] nxt_type;
@@ -73,39 +73,39 @@ module slot2_game_core (
         begin
             case ({ptype, prot})
                 {3'd0, 2'd0}: piece_shape = 16'h0F00;
-                {3'd0, 2'd1}: piece_shape = 16'h1111;
+                {3'd0, 2'd1}: piece_shape = 16'h2222;
                 {3'd0, 2'd2}: piece_shape = 16'h00F0;
-                {3'd0, 2'd3}: piece_shape = 16'h1111;
+                {3'd0, 2'd3}: piece_shape = 16'h4444;
 
-                {3'd1, 2'd0}: piece_shape = 16'h0330;
-                {3'd1, 2'd1}: piece_shape = 16'h0330;
-                {3'd1, 2'd2}: piece_shape = 16'h0330;
-                {3'd1, 2'd3}: piece_shape = 16'h0330;
+                {3'd1, 2'd0}: piece_shape = 16'h0660;
+                {3'd1, 2'd1}: piece_shape = 16'h0660;
+                {3'd1, 2'd2}: piece_shape = 16'h0660;
+                {3'd1, 2'd3}: piece_shape = 16'h0660;
 
-                {3'd2, 2'd0}: piece_shape = 16'h0072;
-                {3'd2, 2'd1}: piece_shape = 16'h0232;
-                {3'd2, 2'd2}: piece_shape = 16'h0270;
-                {3'd2, 2'd3}: piece_shape = 16'h0131;
+                {3'd2, 2'd0}: piece_shape = 16'h00E4;
+                {3'd2, 2'd1}: piece_shape = 16'h0464;
+                {3'd2, 2'd2}: piece_shape = 16'h04E0;
+                {3'd2, 2'd3}: piece_shape = 16'h04C4;
 
-                {3'd3, 2'd0}: piece_shape = 16'h0063;
-                {3'd3, 2'd1}: piece_shape = 16'h0132;
-                {3'd3, 2'd2}: piece_shape = 16'h0063;
-                {3'd3, 2'd3}: piece_shape = 16'h0132;
+                {3'd3, 2'd0}: piece_shape = 16'h00C6;
+                {3'd3, 2'd1}: piece_shape = 16'h0264;
+                {3'd3, 2'd2}: piece_shape = 16'h00C6;
+                {3'd3, 2'd3}: piece_shape = 16'h0264;
 
-                {3'd4, 2'd0}: piece_shape = 16'h0036;
-                {3'd4, 2'd1}: piece_shape = 16'h0231;
-                {3'd4, 2'd2}: piece_shape = 16'h0036;
-                {3'd4, 2'd3}: piece_shape = 16'h0231;
+                {3'd4, 2'd0}: piece_shape = 16'h006C;
+                {3'd4, 2'd1}: piece_shape = 16'h0462;
+                {3'd4, 2'd2}: piece_shape = 16'h006C;
+                {3'd4, 2'd3}: piece_shape = 16'h0462;
 
-                {3'd5, 2'd0}: piece_shape = 16'h0074;
-                {3'd5, 2'd1}: piece_shape = 16'h0223;
-                {3'd5, 2'd2}: piece_shape = 16'h0170;
-                {3'd5, 2'd3}: piece_shape = 16'h0311;
+                {3'd5, 2'd0}: piece_shape = 16'h00E8;
+                {3'd5, 2'd1}: piece_shape = 16'h0446;
+                {3'd5, 2'd2}: piece_shape = 16'h02E0;
+                {3'd5, 2'd3}: piece_shape = 16'h0C44;
 
-                {3'd6, 2'd0}: piece_shape = 16'h0071;
-                {3'd6, 2'd1}: piece_shape = 16'h0322;
-                {3'd6, 2'd2}: piece_shape = 16'h0470;
-                {3'd6, 2'd3}: piece_shape = 16'h0113;
+                {3'd6, 2'd0}: piece_shape = 16'h00E2;
+                {3'd6, 2'd1}: piece_shape = 16'h0644;
+                {3'd6, 2'd2}: piece_shape = 16'h08E0;
+                {3'd6, 2'd3}: piece_shape = 16'h044C;
                 default: piece_shape = 16'h0000;
             endcase
         end
@@ -154,36 +154,93 @@ module slot2_game_core (
     endfunction
 
     function collision;
-        input [3:0] px;
+        input signed [4:0] px;
         input [6:0] py;
         input [1:0] prot;
         input [2:0] ptype;
         reg hit;
         integer row;
+        integer col;
         reg [6:0] abs_y;
+        reg signed [5:0] abs_x;
         reg [15:0] shape;
-        reg [3:0] row_shape;
-        reg [13:0] shifted_shape;
+        reg [9:0] board_bits;
         begin
             shape = piece_shape(ptype, prot);
             hit = 1'b0;
             for (row = 0; row < 4; row = row + 1) begin
-                row_shape = shape_row_bits(shape, row[1:0]);
-                if (row_shape != 4'd0) begin
-                    abs_y = py + {5'd0, row[1:0]};
-                    if (px >= 4'd10 || abs_y[6] || abs_y >= 7'd20) begin
-                        hit = 1'b1;
-                    end else begin
-                        shifted_shape = {10'd0, row_shape} << px;
-                        if (|shifted_shape[13:10]) begin
+                for (col = 0; col < 4; col = col + 1) begin
+                    if (shape[row*4 + col]) begin
+                        abs_y = py + {5'd0, row[1:0]};
+                        abs_x = px + col;
+                        if (abs_x < 0 || abs_x >= 10 || abs_y[6] || abs_y >= 7'd20) begin
                             hit = 1'b1;
-                        end else if (|(board_row(abs_y[4:0]) & shifted_shape[9:0])) begin
-                            hit = 1'b1;
+                        end else begin
+                            board_bits = board_row(abs_y[4:0]);
+                            if (board_bits[abs_x[3:0]])
+                                hit = 1'b1;
                         end
                     end
                 end
             end
             collision = hit;
+        end
+    endfunction
+
+    // lock piece into board
+    function [199:0] lock_to_board;
+        input [199:0] old_board;
+        input signed [4:0] px;
+        input [6:0] py;
+        input [1:0] prot;
+        input [2:0] ptype;
+        integer row;
+        integer col;
+        reg [6:0] abs_y;
+        reg signed [5:0] abs_x;
+        reg [15:0] shape;
+        reg [9:0] row_mask;
+        begin
+            shape = piece_shape(ptype, prot);
+            lock_to_board = old_board;
+            for (row = 0; row < 4; row = row + 1) begin
+                row_mask = 10'd0;
+                abs_y = py + {5'd0, row[1:0]};
+                if (!abs_y[6] && abs_y < 7'd20) begin
+                    for (col = 0; col < 4; col = col + 1) begin
+                        if (shape[row*4 + col]) begin
+                            abs_x = px + col;
+                            if (!(abs_x < 0 || abs_x >= 10)) begin
+                                row_mask[abs_x[3:0]] = 1'b1;
+                            end
+                        end
+                    end
+
+                    case (abs_y[4:0])
+                        5'd0:  lock_to_board[0 +: 10]   = old_board[0 +: 10]   | row_mask;
+                        5'd1:  lock_to_board[10 +: 10]  = old_board[10 +: 10]  | row_mask;
+                        5'd2:  lock_to_board[20 +: 10]  = old_board[20 +: 10]  | row_mask;
+                        5'd3:  lock_to_board[30 +: 10]  = old_board[30 +: 10]  | row_mask;
+                        5'd4:  lock_to_board[40 +: 10]  = old_board[40 +: 10]  | row_mask;
+                        5'd5:  lock_to_board[50 +: 10]  = old_board[50 +: 10]  | row_mask;
+                        5'd6:  lock_to_board[60 +: 10]  = old_board[60 +: 10]  | row_mask;
+                        5'd7:  lock_to_board[70 +: 10]  = old_board[70 +: 10]  | row_mask;
+                        5'd8:  lock_to_board[80 +: 10]  = old_board[80 +: 10]  | row_mask;
+                        5'd9:  lock_to_board[90 +: 10]  = old_board[90 +: 10]  | row_mask;
+                        5'd10: lock_to_board[100 +: 10] = old_board[100 +: 10] | row_mask;
+                        5'd11: lock_to_board[110 +: 10] = old_board[110 +: 10] | row_mask;
+                        5'd12: lock_to_board[120 +: 10] = old_board[120 +: 10] | row_mask;
+                        5'd13: lock_to_board[130 +: 10] = old_board[130 +: 10] | row_mask;
+                        5'd14: lock_to_board[140 +: 10] = old_board[140 +: 10] | row_mask;
+                        5'd15: lock_to_board[150 +: 10] = old_board[150 +: 10] | row_mask;
+                        5'd16: lock_to_board[160 +: 10] = old_board[160 +: 10] | row_mask;
+                        5'd17: lock_to_board[170 +: 10] = old_board[170 +: 10] | row_mask;
+                        5'd18: lock_to_board[180 +: 10] = old_board[180 +: 10] | row_mask;
+                        5'd19: lock_to_board[190 +: 10] = old_board[190 +: 10] | row_mask;
+                        default: ;
+                    endcase
+                end
+            end
         end
     endfunction
 
@@ -211,59 +268,6 @@ module slot2_game_core (
         end
     endfunction
 
-    // lock piece into board
-    function [199:0] lock_to_board;
-        input [199:0] old_board;
-        input [3:0] px;
-        input [6:0] py;
-        input [1:0] prot;
-        input [2:0] ptype;
-        integer row;
-        reg [6:0] abs_y;
-        reg [199:0] new_board;
-        reg [15:0] shape;
-        reg [3:0] row_shape;
-        reg [13:0] shifted_shape;
-        begin
-            shape = piece_shape(ptype, prot);
-            new_board = old_board;
-            for (row = 0; row < 4; row = row + 1) begin
-                row_shape = shape_row_bits(shape, row[1:0]);
-                abs_y = py + {5'd0, row[1:0]};
-                if (row_shape != 4'd0 && px < 4'd10 && !abs_y[6] && abs_y < 7'd20) begin
-                    shifted_shape = {10'd0, row_shape} << px;
-                    case (abs_y[4:0])
-                        5'd0:  new_board[0 +: 10]   = old_board[0 +: 10]   | shifted_shape[9:0];
-                        5'd1:  new_board[10 +: 10]  = old_board[10 +: 10]  | shifted_shape[9:0];
-                        5'd2:  new_board[20 +: 10]  = old_board[20 +: 10]  | shifted_shape[9:0];
-                        5'd3:  new_board[30 +: 10]  = old_board[30 +: 10]  | shifted_shape[9:0];
-                        5'd4:  new_board[40 +: 10]  = old_board[40 +: 10]  | shifted_shape[9:0];
-                        5'd5:  new_board[50 +: 10]  = old_board[50 +: 10]  | shifted_shape[9:0];
-                        5'd6:  new_board[60 +: 10]  = old_board[60 +: 10]  | shifted_shape[9:0];
-                        5'd7:  new_board[70 +: 10]  = old_board[70 +: 10]  | shifted_shape[9:0];
-                        5'd8:  new_board[80 +: 10]  = old_board[80 +: 10]  | shifted_shape[9:0];
-                        5'd9:  new_board[90 +: 10]  = old_board[90 +: 10]  | shifted_shape[9:0];
-                        5'd10: new_board[100 +: 10] = old_board[100 +: 10] | shifted_shape[9:0];
-                        5'd11: new_board[110 +: 10] = old_board[110 +: 10] | shifted_shape[9:0];
-                        5'd12: new_board[120 +: 10] = old_board[120 +: 10] | shifted_shape[9:0];
-                        5'd13: new_board[130 +: 10] = old_board[130 +: 10] | shifted_shape[9:0];
-                        5'd14: new_board[140 +: 10] = old_board[140 +: 10] | shifted_shape[9:0];
-                        5'd15: new_board[150 +: 10] = old_board[150 +: 10] | shifted_shape[9:0];
-                        5'd16: new_board[160 +: 10] = old_board[160 +: 10] | shifted_shape[9:0];
-                        5'd17: new_board[170 +: 10] = old_board[170 +: 10] | shifted_shape[9:0];
-                        5'd18: new_board[180 +: 10] = old_board[180 +: 10] | shifted_shape[9:0];
-                        5'd19: new_board[190 +: 10] = old_board[190 +: 10] | shifted_shape[9:0];
-                        default: ;
-                    endcase
-                    if (|shifted_shape[13:10]) begin
-                        new_board = old_board;
-                    end
-                end
-            end
-            lock_to_board = new_board;
-        end
-    endfunction
-
     assign ghost_piece_y = ghost_y_reg;
 
     wire [9:0] next_line_total = total_lines + {7'd0, rows_to_clear};
@@ -279,7 +283,7 @@ module slot2_game_core (
             compact_reg <= 200'd0;
             cur_type <= 3'd0;
             cur_rot <= 2'd0;
-            cur_x <= 4'd3;
+            cur_x <= 5'sd3;
             cur_y <= 6'd0;
             ghost_y_reg <= 6'd0;
             nxt_type <= 3'd0;
@@ -307,12 +311,12 @@ module slot2_game_core (
                         spawn_req <= 1'b0;
                         cur_type <= nxt_type;
                         cur_rot <= 2'd0;
-                        cur_x <= 4'd3;
+                        cur_x <= 5'sd3;
                         cur_y <= 6'd0;
                         ghost_y_reg <= 6'd0;
                         nxt_type <= (lfsr[2:0] < 3'd7) ? lfsr[2:0] :
                                     (lfsr[5:3] < 3'd7) ? lfsr[5:3] : 3'd0;
-                        if (collision(4'd3, 7'd0, 2'd0, nxt_type)) begin
+                        if (collision(5'sd3, 7'd0, 2'd0, nxt_type)) begin
                             state <= ST_GAME_OVER;
                         end
                     end else begin
@@ -322,57 +326,42 @@ module slot2_game_core (
 
                         if (hard_drop) begin
                             state <= ST_HARD_DROP;
+                        end else if (gravity_tick || soft_drop) begin
+                            if (!collision(cur_x, {1'b0, cur_y} + 7'd1, cur_rot, cur_type)) begin
+                                cur_y <= cur_y + 6'd1;
+                                ghost_y_reg <= cur_y + 6'd1;
+                            end else begin
+                                board_reg <= lock_to_board(board_reg, cur_x, {1'b0, cur_y}, cur_rot, cur_type);
+                                lock_pulse <= 1'b1;
+                                state <= ST_CLEAR_ANIM;
+                                clear_delay <= 5'd20;
+                            end
                         end else begin
+                            if (move_left && !collision(cur_x - 5'sd1, {1'b0, cur_y}, cur_rot, cur_type)) begin
+                                cur_x <= cur_x - 5'sd1;
+                                ghost_y_reg <= cur_y;
+                            end
+                            if (move_right && !collision(cur_x + 5'sd1, {1'b0, cur_y}, cur_rot, cur_type)) begin
+                                cur_x <= cur_x + 5'sd1;
+                                ghost_y_reg <= cur_y;
+                            end
+
                             if (rotate_cw) begin
                                 if (!collision(cur_x, {1'b0, cur_y}, cur_rot + 2'd1, cur_type)) begin
                                     cur_rot <= cur_rot + 2'd1;
                                     ghost_y_reg <= cur_y;
-                                end else if (!collision(cur_x - 4'd1, {1'b0, cur_y}, cur_rot + 2'd1, cur_type)) begin
+                                end else if (!collision(cur_x - 5'sd1, {1'b0, cur_y}, cur_rot + 2'd1, cur_type)) begin
                                     cur_rot <= cur_rot + 2'd1;
-                                    cur_x <= cur_x - 4'd1;
+                                    cur_x <= cur_x - 5'sd1;
                                     ghost_y_reg <= cur_y;
-                                end else if (!collision(cur_x + 4'd1, {1'b0, cur_y}, cur_rot + 2'd1, cur_type)) begin
+                                end else if (!collision(cur_x + 5'sd1, {1'b0, cur_y}, cur_rot + 2'd1, cur_type)) begin
                                     cur_rot <= cur_rot + 2'd1;
-                                    cur_x <= cur_x + 4'd1;
-                                    ghost_y_reg <= cur_y;
-                                end else if (!collision(cur_x - 4'd2, {1'b0, cur_y}, cur_rot + 2'd1, cur_type)) begin
-                                    cur_rot <= cur_rot + 2'd1;
-                                    cur_x <= cur_x - 4'd2;
-                                    ghost_y_reg <= cur_y;
-                                end else if (!collision(cur_x + 4'd2, {1'b0, cur_y}, cur_rot + 2'd1, cur_type)) begin
-                                    cur_rot <= cur_rot + 2'd1;
-                                    cur_x <= cur_x + 4'd2;
-                                    ghost_y_reg <= cur_y;
-                                end else if (!collision(cur_x - 4'd3, {1'b0, cur_y}, cur_rot + 2'd1, cur_type)) begin
-                                    cur_rot <= cur_rot + 2'd1;
-                                    cur_x <= cur_x - 4'd3;
-                                    ghost_y_reg <= cur_y;
-                                end else if (!collision(cur_x + 4'd3, {1'b0, cur_y}, cur_rot + 2'd1, cur_type)) begin
-                                    cur_rot <= cur_rot + 2'd1;
-                                    cur_x <= cur_x + 4'd3;
+                                    cur_x <= cur_x + 5'sd1;
                                     ghost_y_reg <= cur_y;
                                 end else if (cur_y > 6'd0 && !collision(cur_x, {1'b0, cur_y} - 7'd1, cur_rot + 2'd1, cur_type)) begin
                                     cur_rot <= cur_rot + 2'd1;
                                     cur_y <= cur_y - 6'd1;
                                     ghost_y_reg <= cur_y - 6'd1;
-                                end
-                            end else if (move_left && !move_right &&
-                                         !collision(cur_x - 4'd1, {1'b0, cur_y}, cur_rot, cur_type)) begin
-                                cur_x <= cur_x - 4'd1;
-                                ghost_y_reg <= cur_y;
-                            end else if (move_right && !move_left &&
-                                         !collision(cur_x + 4'd1, {1'b0, cur_y}, cur_rot, cur_type)) begin
-                                cur_x <= cur_x + 4'd1;
-                                ghost_y_reg <= cur_y;
-                            end else if (gravity_tick || soft_drop) begin
-                                if (!collision(cur_x, {1'b0, cur_y} + 7'd1, cur_rot, cur_type)) begin
-                                    cur_y <= cur_y + 6'd1;
-                                    ghost_y_reg <= cur_y + 6'd1;
-                                end else begin
-                                    board_reg <= lock_to_board(board_reg, cur_x, {1'b0, cur_y}, cur_rot, cur_type);
-                                    lock_pulse <= 1'b1;
-                                    state <= ST_CLEAR_ANIM;
-                                    clear_delay <= 5'd20;
                                 end
                             end
                         end
