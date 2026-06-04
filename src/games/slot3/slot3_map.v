@@ -105,7 +105,9 @@ module slot3_map (
     assign walk1 = (query_x1 < 10'd640) && (query_y1 < 9'd480) && walkable_tile1;
     assign walk2 = (query_x2 < 10'd640) && (query_y2 < 9'd480) && walkable_tile2;
     assign walk3 = (query_x3 < 10'd640) && (query_y3 < 9'd480) && walkable_tile3;
-    assign render_tile = tile_map[tile_addr(render_tx, render_ty)];
+    wire [4:0] safe_render_tx = (render_tx < 5'd20) ? render_tx : 5'd19;
+    wire [3:0] safe_render_ty = (render_ty < 4'd15) ? render_ty : 4'd14;
+    assign render_tile = tile_map[tile_addr(safe_render_tx, safe_render_ty)];
 
     integer i;
     reg [1:0] template_id;

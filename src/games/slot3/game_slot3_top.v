@@ -113,6 +113,8 @@ module game_slot3_top (
     wire [8:0] bt_timer, bt_cooldown;
     wire [7:0] attract_timer;
     wire [5:0] ammo;
+    wire [2:0] charges_w;
+    wire [1:0] emp_count;
     wire [2:0] rescued;
     wire bullet_time_active = (bt_timer != 9'd0);
     wire quest_touch_trinity;
@@ -121,8 +123,13 @@ module game_slot3_top (
     wire [7:0] neo_touch_pickup;
     wire phone_reachable;
     wire pickup_give_ammo;
+    wire pickup_give_charge;
+    wire pickup_give_emp;
     wire neo_touch_red;
     reg  do_rescue_pulse;
+    wire combat_use_ammo;
+    wire combat_use_charge;
+    wire combat_use_emp;
 
     wire walk_full_0, walk_full_1;
     wire walk_full = walk_full_0 && walk_full_1;
@@ -140,9 +147,14 @@ module game_slot3_top (
         .has_bullet_time(has_bullet_time),
         .bt_timer(bt_timer), .bt_cooldown(bt_cooldown),
         .attract_timer(attract_timer),
-        .ammo(ammo), .rescued(rescued),
+        .ammo(ammo), .charges(charges_w), .emp_count(emp_count), .rescued(rescued),
+        .consume_ammo(combat_use_ammo),
+        .consume_charge(combat_use_charge),
+        .consume_emp(combat_use_emp),
         .give_bullet_time(quest_touch_trinity),
         .give_ammo(pickup_give_ammo),
+        .give_charge(pickup_give_charge),
+        .give_emp(pickup_give_emp),
         .do_attract(neo_touch_red),
         .do_rescue(do_rescue_pulse),
         .start_level(start_level_pulse)
@@ -253,7 +265,28 @@ module game_slot3_top (
         .phone_reachable(phone_reachable)
     );
 
-    assign pickup_give_ammo = |(neo_touch_pickup & pickup_active);
+    wire [7:0] is_ammo = {
+        (pickup_type7 == 3'd1), (pickup_type6 == 3'd1),
+        (pickup_type5 == 3'd1), (pickup_type4 == 3'd1),
+        (pickup_type3 == 3'd1), (pickup_type2 == 3'd1),
+        (pickup_type1 == 3'd1), (pickup_type0 == 3'd1)
+    };
+    wire [7:0] is_charge = {
+        (pickup_type7 == 3'd2), (pickup_type6 == 3'd2),
+        (pickup_type5 == 3'd2), (pickup_type4 == 3'd2),
+        (pickup_type3 == 3'd2), (pickup_type2 == 3'd2),
+        (pickup_type1 == 3'd2), (pickup_type0 == 3'd2)
+    };
+    wire [7:0] is_emp = {
+        (pickup_type7 == 3'd3), (pickup_type6 == 3'd3),
+        (pickup_type5 == 3'd3), (pickup_type4 == 3'd3),
+        (pickup_type3 == 3'd3), (pickup_type2 == 3'd3),
+        (pickup_type1 == 3'd3), (pickup_type0 == 3'd3)
+    };
+
+    assign pickup_give_ammo   = |(neo_touch_pickup & pickup_active & is_ammo);
+    assign pickup_give_charge = |(neo_touch_pickup & pickup_active & is_charge);
+    assign pickup_give_emp    = |(neo_touch_pickup & pickup_active & is_emp);
     assign neo_touch_red = playing &&
         (neo_x < red_x + 10'd16) && (neo_x + 10'd16 > red_x) &&
         (neo_y < red_y + 9'd20) && (neo_y + 9'd20 > red_y) &&
@@ -284,9 +317,6 @@ module game_slot3_top (
     end
     assign npc_rescue_mask = npc_rescue_reg;
 
-    wire combat_use_ammo;
-    wire combat_use_charge;
-    wire combat_use_emp;
     wire [9:0] bullet_x0, bullet_x1, bullet_x2, bullet_x3;
     wire [8:0] bullet_y0, bullet_y1, bullet_y2, bullet_y3;
     wire [1:0] bullet_dir0, bullet_dir1, bullet_dir2, bullet_dir3;
@@ -301,7 +331,7 @@ module game_slot3_top (
         .frame_tick(frame_tick_q), .playing(playing), .move_phase(move_phase),
         .shoot_pulse(shoot_pulse), .bomb_pulse(bomb_pulse), .emp_pulse(emp_pulse),
         .neo_x(neo_x), .neo_y(neo_y), .neo_dir(neo_dir),
-        .ammo(ammo), .charges(3'd0), .emp_count(2'd0),
+        .ammo(ammo), .charges(charges_w), .emp_count(emp_count),
         .bullet_time_active(bullet_time_active),
         .smith_x0(smith_x0), .smith_x1(smith_x1), .smith_x2(smith_x2), .smith_x3(smith_x3),
         .smith_x4(smith_x4), .smith_x5(smith_x5), .smith_x6(smith_x6), .smith_x7(smith_x7),
@@ -379,6 +409,8 @@ module game_slot3_top (
     (* keep = "true" *) reg [7:0]  attract_timer_video_q;
     (* keep = "true" *) reg [8:0]  bt_timer_video_q;
     (* keep = "true" *) reg [5:0]  ammo_video_q;
+    (* keep = "true" *) reg [2:0]  charges_video_q;
+    (* keep = "true" *) reg [1:0]  emp_count_video_q;
     (* keep = "true" *) reg [1:0]  quest_phase_video_q;
     (* keep = "true" *) reg [2:0]  rescued_video_q;
     (* keep = "true" *) reg [2:0]  rescue_goal_video_q;
@@ -402,6 +434,11 @@ module game_slot3_top (
     (* keep = "true" *) reg [9:0]  bullet_x0_video_q, bullet_x1_video_q, bullet_x2_video_q, bullet_x3_video_q;
     (* keep = "true" *) reg [8:0]  bullet_y0_video_q, bullet_y1_video_q, bullet_y2_video_q, bullet_y3_video_q;
     (* keep = "true" *) reg [3:0]  bullet_active_video_q;
+    (* keep = "true" *) reg [9:0]  bomb_x0_video_q, bomb_x1_video_q, bomb_x2_video_q, bomb_x3_video_q;
+    (* keep = "true" *) reg [8:0]  bomb_y0_video_q, bomb_y1_video_q, bomb_y2_video_q, bomb_y3_video_q;
+    (* keep = "true" *) reg [7:0]  bomb_timer0_video_q, bomb_timer1_video_q, bomb_timer2_video_q, bomb_timer3_video_q;
+    (* keep = "true" *) reg [3:0]  bomb_active_video_q;
+    (* keep = "true" *) reg [8:0]  emp_visual_video_q;
     (* keep = "true" *) reg [9:0]  pickup_x0_video_q, pickup_x1_video_q, pickup_x2_video_q, pickup_x3_video_q;
     (* keep = "true" *) reg [9:0]  pickup_x4_video_q, pickup_x5_video_q, pickup_x6_video_q, pickup_x7_video_q;
     (* keep = "true" *) reg [8:0]  pickup_y0_video_q, pickup_y1_video_q, pickup_y2_video_q, pickup_y3_video_q;
@@ -438,6 +475,8 @@ module game_slot3_top (
             attract_timer_video_q <= 8'd0;
             bt_timer_video_q <= 9'd0;
             ammo_video_q <= 6'd0;
+            charges_video_q <= 3'd0;
+            emp_count_video_q <= 2'd0;
             quest_phase_video_q <= 2'd0;
             rescued_video_q <= 3'd0;
             rescue_goal_video_q <= 3'd0;
@@ -460,6 +499,11 @@ module game_slot3_top (
             bullet_x0_video_q <= 10'd0; bullet_x1_video_q <= 10'd0; bullet_x2_video_q <= 10'd0; bullet_x3_video_q <= 10'd0;
             bullet_y0_video_q <= 9'd0; bullet_y1_video_q <= 9'd0; bullet_y2_video_q <= 9'd0; bullet_y3_video_q <= 9'd0;
             bullet_active_video_q <= 4'd0;
+            bomb_x0_video_q <= 10'd0; bomb_x1_video_q <= 10'd0; bomb_x2_video_q <= 10'd0; bomb_x3_video_q <= 10'd0;
+            bomb_y0_video_q <= 9'd0; bomb_y1_video_q <= 9'd0; bomb_y2_video_q <= 9'd0; bomb_y3_video_q <= 9'd0;
+            bomb_timer0_video_q <= 8'd0; bomb_timer1_video_q <= 8'd0; bomb_timer2_video_q <= 8'd0; bomb_timer3_video_q <= 8'd0;
+            bomb_active_video_q <= 4'd0;
+            emp_visual_video_q <= 9'd0;
             pickup_x0_video_q <= 10'd0; pickup_x1_video_q <= 10'd0; pickup_x2_video_q <= 10'd0; pickup_x3_video_q <= 10'd0;
             pickup_x4_video_q <= 10'd0; pickup_x5_video_q <= 10'd0; pickup_x6_video_q <= 10'd0; pickup_x7_video_q <= 10'd0;
             pickup_y0_video_q <= 9'd0; pickup_y1_video_q <= 9'd0; pickup_y2_video_q <= 9'd0; pickup_y3_video_q <= 9'd0;
@@ -485,6 +529,8 @@ module game_slot3_top (
             attract_timer_video_q <= attract_timer;
             bt_timer_video_q <= bt_timer;
             ammo_video_q <= ammo;
+            charges_video_q <= charges_w;
+            emp_count_video_q <= emp_count;
             quest_phase_video_q <= quest_phase;
             rescued_video_q <= rescued;
             rescue_goal_video_q <= rescue_goal;
@@ -507,6 +553,11 @@ module game_slot3_top (
             bullet_x0_video_q <= bullet_x0; bullet_x1_video_q <= bullet_x1; bullet_x2_video_q <= bullet_x2; bullet_x3_video_q <= bullet_x3;
             bullet_y0_video_q <= bullet_y0; bullet_y1_video_q <= bullet_y1; bullet_y2_video_q <= bullet_y2; bullet_y3_video_q <= bullet_y3;
             bullet_active_video_q <= bullet_active;
+            bomb_x0_video_q <= bomb_x0; bomb_x1_video_q <= bomb_x1; bomb_x2_video_q <= bomb_x2; bomb_x3_video_q <= bomb_x3;
+            bomb_y0_video_q <= bomb_y0; bomb_y1_video_q <= bomb_y1; bomb_y2_video_q <= bomb_y2; bomb_y3_video_q <= bomb_y3;
+            bomb_timer0_video_q <= bomb_timer0; bomb_timer1_video_q <= bomb_timer1; bomb_timer2_video_q <= bomb_timer2; bomb_timer3_video_q <= bomb_timer3;
+            bomb_active_video_q <= bomb_active;
+            emp_visual_video_q <= emp_visual;
             pickup_x0_video_q <= pickup_x0; pickup_x1_video_q <= pickup_x1; pickup_x2_video_q <= pickup_x2; pickup_x3_video_q <= pickup_x3;
             pickup_x4_video_q <= pickup_x4; pickup_x5_video_q <= pickup_x5; pickup_x6_video_q <= pickup_x6; pickup_x7_video_q <= pickup_x7;
             pickup_y0_video_q <= pickup_y0; pickup_y1_video_q <= pickup_y1; pickup_y2_video_q <= pickup_y2; pickup_y3_video_q <= pickup_y3;
@@ -544,7 +595,7 @@ module game_slot3_top (
         .move_phase(move_phase_video_q), .frame_count(frame_count_video_q),
         .neo_x(neo_x_video_q), .neo_y(neo_y_video_q), .neo_dir(neo_dir_video_q),
         .attract_timer(attract_timer_video_q), .bt_timer(bt_timer_video_q), .cloak_timer(9'd0),
-        .ammo(ammo_video_q), .charges(3'd0), .emp_count(2'd0),
+        .ammo(ammo_video_q), .charges(charges_video_q), .emp_count(emp_count_video_q),
         .quest_phase(quest_phase_video_q), .rescued(rescued_video_q), .rescue_goal(rescue_goal_video_q),
         .trinity_found(trinity_found_video_q), .terminal_hacked(terminal_hacked_video_q),
         .smith_x0(smith_x0_video_q), .smith_x1(smith_x1_video_q), .smith_x2(smith_x2_video_q), .smith_x3(smith_x3_video_q),
@@ -566,11 +617,11 @@ module game_slot3_top (
         .bullet_x0(bullet_x0_video_q), .bullet_x1(bullet_x1_video_q), .bullet_x2(bullet_x2_video_q), .bullet_x3(bullet_x3_video_q),
         .bullet_y0(bullet_y0_video_q), .bullet_y1(bullet_y1_video_q), .bullet_y2(bullet_y2_video_q), .bullet_y3(bullet_y3_video_q),
         .bullet_active(bullet_active_video_q),
-        .bomb_x0(10'd0), .bomb_x1(10'd0), .bomb_x2(10'd0), .bomb_x3(10'd0),
-        .bomb_y0(9'd0), .bomb_y1(9'd0), .bomb_y2(9'd0), .bomb_y3(9'd0),
-        .bomb_timer0(8'd0), .bomb_timer1(8'd0), .bomb_timer2(8'd0), .bomb_timer3(8'd0),
-        .bomb_active(4'd0),
-        .emp_visual(9'd0),
+        .bomb_x0(bomb_x0_video_q), .bomb_x1(bomb_x1_video_q), .bomb_x2(bomb_x2_video_q), .bomb_x3(bomb_x3_video_q),
+        .bomb_y0(bomb_y0_video_q), .bomb_y1(bomb_y1_video_q), .bomb_y2(bomb_y2_video_q), .bomb_y3(bomb_y3_video_q),
+        .bomb_timer0(bomb_timer0_video_q), .bomb_timer1(bomb_timer1_video_q), .bomb_timer2(bomb_timer2_video_q), .bomb_timer3(bomb_timer3_video_q),
+        .bomb_active(bomb_active_video_q),
+        .emp_visual(emp_visual_video_q),
         .pickup_x0(pickup_x0_video_q), .pickup_x1(pickup_x1_video_q), .pickup_x2(pickup_x2_video_q), .pickup_x3(pickup_x3_video_q),
         .pickup_x4(pickup_x4_video_q), .pickup_x5(pickup_x5_video_q), .pickup_x6(pickup_x6_video_q), .pickup_x7(pickup_x7_video_q),
         .pickup_y0(pickup_y0_video_q), .pickup_y1(pickup_y1_video_q), .pickup_y2(pickup_y2_video_q), .pickup_y3(pickup_y3_video_q),
@@ -634,9 +685,9 @@ module game_slot3_top (
             case (state)
                 ST_START: begin
                     if (input_up && frame_tick_q && move_phase[4:0] == 5'd0)
-                        menu_choice <= (menu_choice == 2'd0) ? 2'd2 : menu_choice - 2'd1;
+                        menu_choice <= (menu_choice == 2'd0) ? 2'd1 : menu_choice - 2'd1;
                     if (input_down && frame_tick_q && move_phase[4:0] == 5'd0)
-                        menu_choice <= (menu_choice == 2'd2) ? 2'd0 : menu_choice + 2'd1;
+                        menu_choice <= (menu_choice == 2'd1) ? 2'd0 : menu_choice + 2'd1;
                     if (menu_choice == 2'd1 && input_left && frame_tick_q && move_phase[4:0] == 5'd0)
                         start_difficulty <= (start_difficulty > 4'd1) ? start_difficulty - 4'd1 : 4'd1;
                     if (menu_choice == 2'd1 && input_right && frame_tick_q && move_phase[4:0] == 5'd0)

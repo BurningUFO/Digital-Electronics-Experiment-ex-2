@@ -56,8 +56,12 @@ module slot3_combat (
     reg [9:0] bullet_x [0:3];
     reg [8:0] bullet_y [0:3];
     reg [1:0] bullet_dir [0:3];
+    reg [9:0] bomb_x;
+    reg [8:0] bomb_y;
+    reg [7:0] bomb_timer;
     reg replication_used;
     reg [3:0] shoot_cooldown;
+    reg [3:0] bomb_cooldown;
     reg [2:0] replicate_scan_smith;
     reg [2:0] replicate_scan_npc;
 
@@ -77,11 +81,13 @@ module slot3_combat (
     assign bullet_x0=bullet_x[0]; assign bullet_x1=bullet_x[1]; assign bullet_x2=bullet_x[2]; assign bullet_x3=bullet_x[3];
     assign bullet_y0=bullet_y[0]; assign bullet_y1=bullet_y[1]; assign bullet_y2=bullet_y[2]; assign bullet_y3=bullet_y[3];
     assign bullet_dir0=bullet_dir[0]; assign bullet_dir1=bullet_dir[1]; assign bullet_dir2=bullet_dir[2]; assign bullet_dir3=bullet_dir[3];
-    assign bomb_x0=10'd0; assign bomb_x1=10'd0; assign bomb_x2=10'd0; assign bomb_x3=10'd0;
-    assign bomb_y0=9'd0; assign bomb_y1=9'd0; assign bomb_y2=9'd0; assign bomb_y3=9'd0;
-    assign bomb_timer0=8'd0; assign bomb_timer1=8'd0; assign bomb_timer2=8'd0; assign bomb_timer3=8'd0;
+    assign bomb_x0=bomb_x; assign bomb_x1=10'd0; assign bomb_x2=10'd0; assign bomb_x3=10'd0;
+    assign bomb_y0=bomb_y; assign bomb_y1=9'd0; assign bomb_y2=9'd0; assign bomb_y3=9'd0;
+    assign bomb_timer0=bomb_timer; assign bomb_timer1=8'd0; assign bomb_timer2=8'd0; assign bomb_timer3=8'd0;
 
     integer i, j;
+    reg [10:0] dist_x;
+    reg [10:0] dist_y;
     always @(posedge clk) begin
         if (reset || start_level) begin
             for (i = 0; i < 4; i = i + 1) begin
@@ -89,6 +95,9 @@ module slot3_combat (
                 bullet_y[i] <= 9'd0;
                 bullet_dir[i] <= 2'd0;
             end
+            bomb_x <= 10'd0;
+            bomb_y <= 9'd0;
+            bomb_timer <= 8'd0;
             bullet_active <= 4'd0;
             bomb_active <= 4'd0;
             use_ammo <= 1'b0;
@@ -103,6 +112,7 @@ module slot3_combat (
             destroy_ty <= 4'd0;
             emp_visual <= 9'd0;
             shoot_cooldown <= 4'd0;
+            bomb_cooldown <= 4'd0;
             replication_used <= 1'b0;
             replicate_scan_smith <= 3'd0;
             replicate_scan_npc <= 3'd0;
@@ -114,10 +124,12 @@ module slot3_combat (
             smith_stun_mask <= 8'd0;
             replicate_en <= 1'b0;
             destroy_en <= 1'b0;
-            emp_visual <= 9'd0;
 
             if (frame_tick && shoot_cooldown != 4'd0) begin
                 shoot_cooldown <= shoot_cooldown - 4'd1;
+            end
+            if (frame_tick && bomb_cooldown != 4'd0) begin
+                bomb_cooldown <= bomb_cooldown - 4'd1;
             end
 
             if (shoot_pulse && playing && ammo != 6'd0 && shoot_cooldown == 4'd0) begin
@@ -138,7 +150,36 @@ module slot3_combat (
                 end
             end
 
+            if (bomb_pulse && playing && charges != 3'd0 && bomb_cooldown == 4'd0 && !bomb_active[0]) begin
+                case (neo_dir)
+                    2'd0: begin bomb_x <= neo_x; bomb_y <= (neo_y > 9'd24) ? neo_y - 9'd24 : 9'd0; end
+                    2'd1: begin bomb_x <= (neo_x < 10'd600) ? neo_x + 10'd24 : 10'd624; bomb_y <= neo_y; end
+                    2'd2: begin bomb_x <= neo_x; bomb_y <= (neo_y < 9'd448) ? neo_y + 9'd24 : 9'd464; end
+                    default: begin bomb_x <= (neo_x > 10'd24) ? neo_x - 10'd24 : 10'd0; bomb_y <= neo_y; end
+                endcase
+                bomb_timer <= 8'd72;
+                bomb_active[0] <= 1'b1;
+                use_charge <= 1'b1;
+                bomb_cooldown <= 4'd8;
+            end
+
+            if (emp_pulse && playing && emp_count != 2'd0) begin
+                use_emp <= 1'b1;
+                emp_visual <= 9'd96;
+                for (i = 0; i < 8; i = i + 1) begin
+                    if (smith_active[i]) begin
+                        dist_x = (sx[i] > neo_x) ? {1'b0, sx[i] - neo_x} : {1'b0, neo_x - sx[i]};
+                        dist_y = (sy[i] > neo_y) ? {2'b0, sy[i] - neo_y} : {2'b0, neo_y - sy[i]};
+                        if (dist_x + dist_y < 11'd176)
+                            smith_stun_mask[i] <= 1'b1;
+                    end
+                end
+            end
+
             if (frame_tick && playing) begin
+                if (emp_visual != 9'd0)
+                    emp_visual <= emp_visual - 9'd1;
+
                 for (i = 0; i < 2; i = i + 1) begin
                     if (bullet_active[i]) begin
                         case (bullet_dir[i])
@@ -162,6 +203,25 @@ module slot3_combat (
                                 bullet_active[i] <= 1'b0;
                             end
                         end
+                    end
+                end
+
+                if (bomb_active[0]) begin
+                    if (bomb_timer == 8'd1) begin
+                        bomb_active[0] <= 1'b0;
+                        destroy_en <= 1'b1;
+                        destroy_tx <= bomb_x[9:5];
+                        destroy_ty <= bomb_y[8:5];
+                        for (j = 0; j < 8; j = j + 1) begin
+                            if (smith_active[j]) begin
+                                dist_x = (sx[j] > bomb_x) ? {1'b0, sx[j] - bomb_x} : {1'b0, bomb_x - sx[j]};
+                                dist_y = (sy[j] > bomb_y) ? {2'b0, sy[j] - bomb_y} : {2'b0, bomb_y - sy[j]};
+                                if (dist_x + dist_y < 11'd64)
+                                    smith_kill_mask[j] <= 1'b1;
+                            end
+                        end
+                    end else begin
+                        bomb_timer <= bomb_timer - 8'd1;
                     end
                 end
 

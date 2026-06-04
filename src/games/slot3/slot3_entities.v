@@ -46,7 +46,7 @@ module slot3_entities (
     localparam [8:0] SMITH_H = 9'd20;
     localparam [9:0] NPC_W = 10'd15;
     localparam [8:0] NPC_H = 9'd19;
-    localparam [2:0] MAX_SMITH = 3'd3;
+    localparam [3:0] MAX_SMITH = 4'd3;
 
     reg [9:0] smith_x [0:7];
     reg [8:0] smith_y [0:7];
@@ -71,11 +71,13 @@ module slot3_entities (
     assign npc_y4=npc_y[4]; assign npc_y5=npc_y[5]; assign npc_y6=npc_y[6]; assign npc_y7=npc_y[7];
     assign smith_chasing = chase_reg;
 
-    function [2:0] smith_count;
+    function [3:0] smith_count;
         input [7:0] active_mask;
         begin
-            smith_count = active_mask[0] + active_mask[1] + active_mask[2] + active_mask[3] +
-                          active_mask[4] + active_mask[5] + active_mask[6] + active_mask[7];
+            smith_count = {3'b000, active_mask[0]} + {3'b000, active_mask[1]} +
+                          {3'b000, active_mask[2]} + {3'b000, active_mask[3]} +
+                          {3'b000, active_mask[4]} + {3'b000, active_mask[5]} +
+                          {3'b000, active_mask[6]} + {3'b000, active_mask[7]};
         end
     endfunction
 

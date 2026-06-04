@@ -14,16 +14,23 @@ module slot3_player (
     output reg  [9:0]  neo_x,
     output reg  [8:0]  neo_y,
     output reg  [1:0]  neo_dir,
-    output reg  [9:0]  try_x,
-    output reg  [8:0]  try_y,
+    output wire [9:0]  try_x,
+    output wire [8:0]  try_y,
     output reg         has_bullet_time,
     output reg  [8:0]  bt_timer,
     output reg  [8:0]  bt_cooldown,
     output reg  [7:0]  attract_timer,
     output reg  [5:0]  ammo,
+    output reg  [2:0]  charges,
+    output reg  [1:0]  emp_count,
     output reg  [2:0]  rescued,
+    input  wire        consume_ammo,
+    input  wire        consume_charge,
+    input  wire        consume_emp,
     input  wire        give_bullet_time,
     input  wire        give_ammo,
+    input  wire        give_charge,
+    input  wire        give_emp,
     input  wire        do_attract,
     input  wire        do_rescue,
     input  wire        start_level
@@ -46,12 +53,15 @@ module slot3_player (
     reg [8:0] candidate_y;
     reg move_req;
 
+    assign try_x = candidate_x;
+    assign try_y = candidate_y;
+
     always @(*) begin
         candidate_x = neo_x;
         candidate_y = neo_y;
         move_req = 1'b0;
 
-        if (playing && (attract_timer == 8'd0 || bullet_time_active || attract_timer != 8'd0)) begin
+        if (playing && (attract_timer == 8'd0 || bullet_time_active)) begin
             if (input_up_q) begin
                 move_req = 1'b1;
                 candidate_y = (neo_y >= SPEED[8:0]) ? (neo_y - SPEED[8:0]) : 9'd0;
@@ -73,13 +83,13 @@ module slot3_player (
             neo_x <= 10'd48;
             neo_y <= 9'd384;
             neo_dir <= 2'd1;
-            try_x <= 10'd48;
-            try_y <= 9'd384;
             has_bullet_time <= 1'b0;
             bt_timer <= 9'd0;
             bt_cooldown <= 9'd0;
             attract_timer <= 8'd0;
             ammo <= 6'd8;
+            charges <= 3'd0;
+            emp_count <= 2'd0;
             rescued <= 3'd0;
             input_up_q <= 1'b0;
             input_down_q <= 1'b0;
@@ -95,9 +105,6 @@ module slot3_player (
                 if (bt_timer != 9'd0) bt_timer <= bt_timer - 9'd1;
                 if (bt_cooldown != 9'd0) bt_cooldown <= bt_cooldown - 9'd1;
                 if (attract_timer != 8'd0) attract_timer <= attract_timer - 8'd1;
-
-                try_x <= candidate_x;
-                try_y <= candidate_y;
 
                 if (move_req && walkable) begin
                     neo_x <= candidate_x;
@@ -115,7 +122,21 @@ module slot3_player (
             end
 
             if (give_bullet_time) has_bullet_time <= 1'b1;
-            if (give_ammo && ammo <= 6'd51) ammo <= ammo + 6'd12;
+            if (consume_ammo && ammo != 6'd0)
+                ammo <= ammo - 6'd1;
+            else if (give_ammo && ammo <= 6'd51)
+                ammo <= ammo + 6'd12;
+
+            if (consume_charge && charges != 3'd0)
+                charges <= charges - 3'd1;
+            else if (give_charge && charges != 3'd7)
+                charges <= charges + 3'd1;
+
+            if (consume_emp && emp_count != 2'd0)
+                emp_count <= emp_count - 2'd1;
+            else if (give_emp && emp_count != 2'd3)
+                emp_count <= emp_count + 2'd1;
+
             if (do_attract && attract_timer == 8'd0) attract_timer <= ATTRACT_TIME;
             if (do_rescue && rescued != 3'd7) rescued <= rescued + 3'd1;
         end

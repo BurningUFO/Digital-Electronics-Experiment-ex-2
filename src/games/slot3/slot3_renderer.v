@@ -85,6 +85,9 @@ module slot3_renderer (
     wire [8:0] npc_y [0:7];
     wire [9:0] bullet_x [0:3];
     wire [8:0] bullet_y [0:3];
+    wire [9:0] bomb_x [0:3];
+    wire [8:0] bomb_y [0:3];
+    wire [7:0] bomb_timer [0:3];
     wire [9:0] pickup_x [0:7];
     wire [8:0] pickup_y [0:7];
 
@@ -100,6 +103,9 @@ module slot3_renderer (
     assign npc_y[4]=npc_y4; assign npc_y[5]=npc_y5; assign npc_y[6]=npc_y6; assign npc_y[7]=npc_y7;
     assign bullet_x[0]=bullet_x0; assign bullet_x[1]=bullet_x1; assign bullet_x[2]=bullet_x2; assign bullet_x[3]=bullet_x3;
     assign bullet_y[0]=bullet_y0; assign bullet_y[1]=bullet_y1; assign bullet_y[2]=bullet_y2; assign bullet_y[3]=bullet_y3;
+    assign bomb_x[0]=bomb_x0; assign bomb_x[1]=bomb_x1; assign bomb_x[2]=bomb_x2; assign bomb_x[3]=bomb_x3;
+    assign bomb_y[0]=bomb_y0; assign bomb_y[1]=bomb_y1; assign bomb_y[2]=bomb_y2; assign bomb_y[3]=bomb_y3;
+    assign bomb_timer[0]=bomb_timer0; assign bomb_timer[1]=bomb_timer1; assign bomb_timer[2]=bomb_timer2; assign bomb_timer[3]=bomb_timer3;
     assign pickup_x[0]=pickup_x0; assign pickup_x[1]=pickup_x1; assign pickup_x[2]=pickup_x2; assign pickup_x[3]=pickup_x3;
     assign pickup_x[4]=pickup_x4; assign pickup_x[5]=pickup_x5; assign pickup_x[6]=pickup_x6; assign pickup_x[7]=pickup_x7;
     assign pickup_y[0]=pickup_y0; assign pickup_y[1]=pickup_y1; assign pickup_y[2]=pickup_y2; assign pickup_y[3]=pickup_y3;
@@ -149,7 +155,7 @@ module slot3_renderer (
         end
     end
 
-    reg smith_on, npc_on, bullet_on, pickup_on;
+    reg smith_on, npc_on, bullet_on, bomb_on, bomb_flash, pickup_on;
     reg [3:0] smith_lx, npc_lx, neo_lx, pickup_lx;
     reg [4:0] smith_ly, npc_ly, neo_ly, pickup_ly;
     reg smith_is_chasing, smith_is_stunned;
@@ -191,6 +197,17 @@ module slot3_renderer (
                 pixel_x >= bullet_x[i] && pixel_x < bullet_x[i] + 10'd6 &&
                 pixel_y >= bullet_y[i] && pixel_y < bullet_y[i] + 9'd6) begin
                 bullet_on = 1'b1;
+            end
+        end
+
+        bomb_on = 1'b0;
+        bomb_flash = 1'b0;
+        for (i = 0; i < 4; i = i + 1) begin
+            if (!bomb_on && bomb_active[i] &&
+                pixel_x >= bomb_x[i] && pixel_x < bomb_x[i] + 10'd16 &&
+                pixel_y >= bomb_y[i] && pixel_y < bomb_y[i] + 9'd16) begin
+                bomb_on = 1'b1;
+                bomb_flash = (bomb_timer[i] < 8'd24) && frame_count[2];
             end
         end
 
@@ -315,6 +332,13 @@ module slot3_renderer (
             if (bullet_on) begin
                 vga_r = 4'hE; vga_g = 4'hF; vga_b = 4'h7;
             end
+            if (bomb_on) begin
+                if (bomb_flash) begin
+                    vga_r = 4'hF; vga_g = 4'hF; vga_b = 4'hF;
+                end else begin
+                    vga_r = 4'hF; vga_g = 4'h7; vga_b = 4'h1;
+                end
+            end
             if (neo_on) begin
                 case (neo_dir)
                     2'd0: draw_humanoid(neo_lx, neo_ly, 12'h021, 12'h053, 12'hCDA);
@@ -333,6 +357,11 @@ module slot3_renderer (
             if (attract_timer != 8'd0 && pixel_x[3:0] == 4'd0) begin
                 vga_r = vga_r | 4'h3;
             end
+            if (emp_visual != 9'd0 && ((pixel_x[4:0] == 5'd0) || (pixel_y[4:0] == 5'd0))) begin
+                vga_r = vga_r | 4'h4;
+                vga_g = vga_g | 4'h4;
+                vga_b = 4'hF;
+            end
             if (hud_on) begin
                 vga_r = 4'h0; vga_g = 4'h0; vga_b = 4'h0;
                 if (text_hit) begin
@@ -350,6 +379,12 @@ module slot3_renderer (
                     end
                     if (pixel_x >= 10'd458 && pixel_x < 10'd463 && hud_digit_pixel({1'b0, rescue_goal}, pixel_x - 10'd458, pixel_y - 10'd460)) begin
                         vga_r = 4'h5; vga_g = 4'hF; vga_b = 4'h7;
+                    end
+                    if (pixel_x >= 10'd520 && pixel_x < 10'd525 && hud_digit_pixel({1'b0, charges}, pixel_x - 10'd520, pixel_y - 10'd460)) begin
+                        vga_r = 4'hF; vga_g = 4'h8; vga_b = 4'h2;
+                    end
+                    if (pixel_x >= 10'd548 && pixel_x < 10'd553 && hud_digit_pixel({2'b0, emp_count}, pixel_x - 10'd548, pixel_y - 10'd460)) begin
+                        vga_r = 4'h6; vga_g = 4'hF; vga_b = 4'hF;
                     end
                 end
             end

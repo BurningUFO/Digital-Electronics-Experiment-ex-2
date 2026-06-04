@@ -38,6 +38,8 @@ module slot3_quest (
     localparam [1:0] QUEST_RESCUE   = 2'd2;
     localparam [1:0] QUEST_PHONE    = 2'd3;
     localparam [2:0] PTYPE_AMMO     = 3'd1;
+    localparam [2:0] PTYPE_CHARGE   = 3'd2;
+    localparam [2:0] PTYPE_EMP      = 3'd3;
 
     reg [9:0] pickup_x [0:7];
     reg [8:0] pickup_y [0:7];
@@ -140,8 +142,8 @@ module slot3_quest (
             pickup_x[3] <= 10'd0; pickup_x[4] <= 10'd0; pickup_x[5] <= 10'd0; pickup_x[6] <= 10'd0; pickup_x[7] <= 10'd0;
 
             pickup_type[0] <= PTYPE_AMMO;
-            pickup_type[1] <= PTYPE_AMMO;
-            pickup_type[2] <= PTYPE_AMMO;
+            pickup_type[1] <= PTYPE_CHARGE;
+            pickup_type[2] <= PTYPE_EMP;
             pickup_type[3] <= 3'd0;
             pickup_type[4] <= 3'd0;
             pickup_type[5] <= 3'd0;
