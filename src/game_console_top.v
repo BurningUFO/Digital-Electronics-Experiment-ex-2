@@ -64,9 +64,6 @@ module game_console_top (
     wire [3:0] slot2_vga_r;
     wire [3:0] slot2_vga_g;
     wire [3:0] slot2_vga_b;
-    reg  [3:0] slot2_vga_r_q;
-    reg  [3:0] slot2_vga_g_q;
-    reg  [3:0] slot2_vga_b_q;
     wire [15:0] slot2_led;
     wire [7:0] slot2_an;
     wire [7:0] slot2_seg;
@@ -83,9 +80,6 @@ module game_console_top (
     wire [3:0] slot4_vga_r;
     wire [3:0] slot4_vga_g;
     wire [3:0] slot4_vga_b;
-    reg  [3:0] slot4_vga_r_q;
-    reg  [3:0] slot4_vga_g_q;
-    reg  [3:0] slot4_vga_b_q;
     wire [15:0] slot4_led;
     wire [7:0] slot4_an;
     wire [7:0] slot4_seg;
@@ -107,29 +101,16 @@ module game_console_top (
     assign slot3_selected = !menu_active && (game_sel == 3'd2);
     assign slot4_selected = !menu_active && (game_sel == 3'd3);
 
-    // Some renderers are combinational and can glitch while pixel_x/pixel_y settle.
-    // Sample their RGB once per visible pixel, matching slot3's registered output style.
+    // Menu rendering is sampled once per pixel; game slots register RGB at their own boundary.
     always @(posedge CLK100MHZ) begin
         if (reset) begin
             menu_vga_r_q <= 4'h0;
             menu_vga_g_q <= 4'h0;
             menu_vga_b_q <= 4'h0;
-            slot2_vga_r_q <= 4'h0;
-            slot2_vga_g_q <= 4'h0;
-            slot2_vga_b_q <= 4'h0;
-            slot4_vga_r_q <= 4'h0;
-            slot4_vga_g_q <= 4'h0;
-            slot4_vga_b_q <= 4'h0;
         end else if (console_pixel_tick) begin
             menu_vga_r_q <= menu_vga_r;
             menu_vga_g_q <= menu_vga_g;
             menu_vga_b_q <= menu_vga_b;
-            slot2_vga_r_q <= slot2_vga_r;
-            slot2_vga_g_q <= slot2_vga_g;
-            slot2_vga_b_q <= slot2_vga_b;
-            slot4_vga_r_q <= slot4_vga_r;
-            slot4_vga_g_q <= slot4_vga_g;
-            slot4_vga_b_q <= slot4_vga_b;
         end
     end
 
@@ -253,6 +234,8 @@ module game_console_top (
         .sw(SW),
         .ps2_clk(PS2_CLK),
         .ps2_data(PS2_DATA),
+        .ps2_byte_ready(console_ps2_byte_ready),
+        .ps2_byte_data(console_ps2_byte_data),
         .vga_r(slot1_vga_r),
         .vga_g(slot1_vga_g),
         .vga_b(slot1_vga_b),
@@ -296,6 +279,8 @@ module game_console_top (
         .sw(SW),
         .ps2_clk(PS2_CLK),
         .ps2_data(PS2_DATA),
+        .ps2_byte_ready(console_ps2_byte_ready),
+        .ps2_byte_data(console_ps2_byte_data),
         .vga_r(slot2_vga_r),
         .vga_g(slot2_vga_g),
         .vga_b(slot2_vga_b),
@@ -339,6 +324,8 @@ module game_console_top (
         .sw(SW),
         .ps2_clk(PS2_CLK),
         .ps2_data(PS2_DATA),
+        .ps2_byte_ready(console_ps2_byte_ready),
+        .ps2_byte_data(console_ps2_byte_data),
         .vga_r(slot3_vga_r),
         .vga_g(slot3_vga_g),
         .vga_b(slot3_vga_b),
@@ -382,6 +369,8 @@ module game_console_top (
         .sw(SW),
         .ps2_clk(PS2_CLK),
         .ps2_data(PS2_DATA),
+        .ps2_byte_ready(console_ps2_byte_ready),
+        .ps2_byte_data(console_ps2_byte_data),
         .vga_r(slot4_vga_r),
         .vga_g(slot4_vga_g),
         .vga_b(slot4_vga_b),
@@ -400,17 +389,17 @@ module game_console_top (
 `endif
 
     assign active_slot_vga_r = slot1_selected ? slot1_vga_r :
-                               slot2_selected ? slot2_vga_r_q :
+                               slot2_selected ? slot2_vga_r :
                                slot3_selected ? slot3_vga_r :
-                                                slot4_vga_r_q;
+                                                slot4_vga_r;
     assign active_slot_vga_g = slot1_selected ? slot1_vga_g :
-                               slot2_selected ? slot2_vga_g_q :
+                               slot2_selected ? slot2_vga_g :
                                slot3_selected ? slot3_vga_g :
-                                                slot4_vga_g_q;
+                                                slot4_vga_g;
     assign active_slot_vga_b = slot1_selected ? slot1_vga_b :
-                               slot2_selected ? slot2_vga_b_q :
+                               slot2_selected ? slot2_vga_b :
                                slot3_selected ? slot3_vga_b :
-                                                slot4_vga_b_q;
+                                                slot4_vga_b;
 
     assign active_slot_led = slot1_selected ? slot1_led :
                              slot2_selected ? slot2_led :

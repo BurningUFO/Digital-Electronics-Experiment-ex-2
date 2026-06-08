@@ -109,34 +109,46 @@ module slot3_map (
     wire [3:0] safe_render_ty = (render_ty < 4'd15) ? render_ty : 4'd14;
     assign render_tile = tile_map[tile_addr(safe_render_tx, safe_render_ty)];
 
-    integer i;
+    integer init_i;
     reg [1:0] template_id;
-    reg [4:0] tx;
-    reg [3:0] ty;
+    reg       generating;
+    reg [4:0] gen_tx;
+    reg [3:0] gen_ty;
+
+    initial begin
+        for (init_i = 0; init_i < 300; init_i = init_i + 1)
+            tile_map[init_i] = TILE_STREET;
+    end
 
     always @(posedge clk) begin
         if (reset) begin
             gen_done <= 1'b0;
             river_y <= 4'd7;
             template_id <= 2'd0;
-            for (i = 0; i < 300; i = i + 1) begin
-                tile_map[i] <= TILE_STREET;
-            end
+            generating <= 1'b0;
+            gen_tx <= 5'd0;
+            gen_ty <= 4'd0;
         end else begin
             gen_done <= 1'b0;
 
             if (gen_start) begin
                 template_id <= seed[1:0];
                 river_y <= 4'd7;
-                for (i = 0; i < 300; i = i + 1) begin
-                    tx = i % 20;
-                    ty = i / 20;
-                    tile_map[i] <= template_tile(seed[1:0], tx, ty);
+                generating <= 1'b1;
+                gen_tx <= 5'd0;
+                gen_ty <= 4'd0;
+            end else if (generating) begin
+                tile_map[tile_addr(gen_tx, gen_ty)] <= template_tile(template_id, gen_tx, gen_ty);
+                if ((gen_tx == 5'd19) && (gen_ty == 4'd14)) begin
+                    generating <= 1'b0;
+                    gen_done <= 1'b1;
+                end else if (gen_tx == 5'd19) begin
+                    gen_tx <= 5'd0;
+                    gen_ty <= gen_ty + 4'd1;
+                end else begin
+                    gen_tx <= gen_tx + 5'd1;
                 end
-                gen_done <= 1'b1;
-            end
-
-            if (destroy_en) begin
+            end else if (destroy_en) begin
                 tile_map[tile_addr(destroy_tx, destroy_ty)] <= TILE_STREET;
             end
         end

@@ -14,12 +14,12 @@
 
 | 菜单项 | 游戏 |
 | --- | --- |
-| `TANK WAR` | `src/games/slot1/game_slot1_top.v`，内部包装 `src/games/tank/tank_top.v` |
+| `TANK WAR` | `src/games/slot1/game_slot1_top.v`，包装 `src/games/tank/tank_top.v` |
 | `GAME TWO` | `src/games/slot2/game_slot2_top.v` |
 | `GAME THREE` | `src/games/slot3/game_slot3_top.v` |
 | `GAME FOUR` | `src/games/slot4/game_slot4_top.v` |
 
-四个菜单项分别对应 `slot1` 到 `slot4`。成员只需要保持各自 `game_slotN_top` 的模块名和端口不变即可合并。
+四个菜单项分别对应 `slot1` 到 `slot4`。四个槽位统一使用总顶层提供的 VGA 像素坐标、`pixel_tick`、`display_active` 和 PS/2 byte 事件；成员只需要保持各自 `game_slotN_top` 的模块名和端口不变即可合并。
 
 ## Vivado 建工程
 

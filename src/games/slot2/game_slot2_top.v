@@ -15,9 +15,11 @@ module game_slot2_top (
     input  wire [15:0] sw,
     input  wire        ps2_clk,
     input  wire        ps2_data,
-    output wire [3:0]  vga_r,
-    output wire [3:0]  vga_g,
-    output wire [3:0]  vga_b,
+    input  wire        ps2_byte_ready,
+    input  wire [7:0]  ps2_byte_data,
+    output reg  [3:0]  vga_r,
+    output reg  [3:0]  vga_g,
+    output reg  [3:0]  vga_b,
     output wire [15:0] led,
     output wire [7:0]  an,
     output wire        ca,
@@ -45,6 +47,9 @@ module game_slot2_top (
     wire        game_over;
     wire        lock_pulse, line_clear_pulse;
     wire [2:0]  line_clear_count;
+    wire [3:0]  render_r;
+    wire [3:0]  render_g;
+    wire [3:0]  render_b;
 
     // sub-modules
     slot2_tick_gen u_tick (
@@ -58,10 +63,10 @@ module game_slot2_top (
         .clk(clk), .reset(reset),
         .selected(selected),
         .frame_tick(frame_tick),
-        .ps2_clk(ps2_clk), .ps2_data(ps2_data),
+        .ps2_byte_ready(ps2_byte_ready),
+        .ps2_byte_data(ps2_byte_data),
         .btn_l(btn_l), .btn_r(btn_r),
         .btn_d(btn_d), .btn_u(btn_u), .btn_c(btn_c),
-        .ps2_clk(ps2_clk), .ps2_data(ps2_data),
         .move_left(move_left), .move_right(move_right),
         .rotate_cw(rotate_cw),
         .soft_drop(soft_drop), .hard_drop(hard_drop)
@@ -99,8 +104,20 @@ module game_slot2_top (
         .next_type(next_type),
         .score(score), .lines(lines), .level(level),
         .game_over(game_over),
-        .vga_r(vga_r), .vga_g(vga_g), .vga_b(vga_b)
+        .vga_r(render_r), .vga_g(render_g), .vga_b(render_b)
     );
+
+    always @(posedge clk) begin
+        if (reset) begin
+            vga_r <= 4'h0;
+            vga_g <= 4'h0;
+            vga_b <= 4'h0;
+        end else if (pixel_tick) begin
+            vga_r <= render_r;
+            vga_g <= render_g;
+            vga_b <= render_b;
+        end
+    end
 
     // === 7-segment display ===
     reg [15:0] score_sample;

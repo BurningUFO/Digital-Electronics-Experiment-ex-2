@@ -14,7 +14,8 @@ module slot3_renderer (
     input  wire [7:0]  attract_timer,
     input  wire [8:0]  bt_timer,
     input  wire [8:0]  cloak_timer,
-    input  wire [5:0]  ammo,
+    input  wire [3:0]  ammo_tens,
+    input  wire [3:0]  ammo_ones,
     input  wire [2:0]  charges,
     input  wire [1:0]  emp_count,
     input  wire [1:0]  quest_phase,
@@ -70,6 +71,7 @@ module slot3_renderer (
 
     localparam [2:0] ST_START = 3'd0;
     localparam [2:0] ST_PLAY  = 3'd1;
+    localparam [2:0] ST_LOAD  = 3'd2;
     localparam [2:0] ST_WIN   = 3'd3;
     localparam [2:0] ST_LOSE  = 3'd4;
     localparam [2:0] TILE_STREET   = 3'd0;
@@ -159,6 +161,8 @@ module slot3_renderer (
     reg [3:0] smith_lx, npc_lx, neo_lx, pickup_lx;
     reg [4:0] smith_ly, npc_ly, neo_ly, pickup_ly;
     reg smith_is_chasing, smith_is_stunned;
+    wire play_pixel = display_active && selected && (state == ST_PLAY);
+    wire world_pixel = play_pixel && (pixel_y < 10'd456);
     integer i;
     always @(*) begin
         smith_on = 1'b0;
@@ -166,81 +170,91 @@ module slot3_renderer (
         smith_ly = 5'd0;
         smith_is_chasing = 1'b0;
         smith_is_stunned = 1'b0;
-        for (i = 0; i < 8; i = i + 1) begin
-            if (!smith_on && smith_active[i] &&
-                pixel_x >= smith_x[i] && pixel_x < smith_x[i] + 10'd16 &&
-                pixel_y >= smith_y[i] && pixel_y < smith_y[i] + 9'd20) begin
-                smith_on = 1'b1;
-                smith_lx = pixel_x - smith_x[i];
-                smith_ly = pixel_y - smith_y[i];
-                smith_is_chasing = smith_chasing[i];
-                smith_is_stunned = (smith_stun[i] != 6'd0);
+        if (world_pixel) begin
+            for (i = 0; i < 8; i = i + 1) begin
+                if (!smith_on && smith_active[i] &&
+                    pixel_x >= smith_x[i] && pixel_x < smith_x[i] + 10'd16 &&
+                    pixel_y >= smith_y[i] && pixel_y < smith_y[i] + 9'd20) begin
+                    smith_on = 1'b1;
+                    smith_lx = pixel_x - smith_x[i];
+                    smith_ly = pixel_y - smith_y[i];
+                    smith_is_chasing = smith_chasing[i];
+                    smith_is_stunned = (smith_stun[i] != 6'd0);
+                end
             end
         end
 
         npc_on = 1'b0;
         npc_lx = 4'd0;
         npc_ly = 5'd0;
-        for (i = 0; i < 8; i = i + 1) begin
-            if (!npc_on && npc_alive[i] &&
-                pixel_x >= npc_x[i] && pixel_x < npc_x[i] + 10'd15 &&
-                pixel_y >= npc_y[i] && pixel_y < npc_y[i] + 9'd19) begin
-                npc_on = 1'b1;
-                npc_lx = pixel_x - npc_x[i];
-                npc_ly = pixel_y - npc_y[i];
+        if (world_pixel) begin
+            for (i = 0; i < 8; i = i + 1) begin
+                if (!npc_on && npc_alive[i] &&
+                    pixel_x >= npc_x[i] && pixel_x < npc_x[i] + 10'd15 &&
+                    pixel_y >= npc_y[i] && pixel_y < npc_y[i] + 9'd19) begin
+                    npc_on = 1'b1;
+                    npc_lx = pixel_x - npc_x[i];
+                    npc_ly = pixel_y - npc_y[i];
+                end
             end
         end
 
         bullet_on = 1'b0;
-        for (i = 0; i < 2; i = i + 1) begin
-            if (!bullet_on && bullet_active[i] &&
-                pixel_x >= bullet_x[i] && pixel_x < bullet_x[i] + 10'd6 &&
-                pixel_y >= bullet_y[i] && pixel_y < bullet_y[i] + 9'd6) begin
-                bullet_on = 1'b1;
+        if (world_pixel) begin
+            for (i = 0; i < 2; i = i + 1) begin
+                if (!bullet_on && bullet_active[i] &&
+                    pixel_x >= bullet_x[i] && pixel_x < bullet_x[i] + 10'd6 &&
+                    pixel_y >= bullet_y[i] && pixel_y < bullet_y[i] + 9'd6) begin
+                    bullet_on = 1'b1;
+                end
             end
         end
 
         bomb_on = 1'b0;
         bomb_flash = 1'b0;
-        for (i = 0; i < 4; i = i + 1) begin
-            if (!bomb_on && bomb_active[i] &&
-                pixel_x >= bomb_x[i] && pixel_x < bomb_x[i] + 10'd16 &&
-                pixel_y >= bomb_y[i] && pixel_y < bomb_y[i] + 9'd16) begin
-                bomb_on = 1'b1;
-                bomb_flash = (bomb_timer[i] < 8'd24) && frame_count[2];
+        if (world_pixel) begin
+            for (i = 0; i < 4; i = i + 1) begin
+                if (!bomb_on && bomb_active[i] &&
+                    pixel_x >= bomb_x[i] && pixel_x < bomb_x[i] + 10'd16 &&
+                    pixel_y >= bomb_y[i] && pixel_y < bomb_y[i] + 9'd16) begin
+                    bomb_on = 1'b1;
+                    bomb_flash = (bomb_timer[i] < 8'd24) && frame_count[2];
+                end
             end
         end
 
         pickup_on = 1'b0;
         pickup_lx = 4'd0;
         pickup_ly = 5'd0;
-        for (i = 0; i < 8; i = i + 1) begin
-            if (!pickup_on && pickup_active[i] &&
-                pixel_x >= pickup_x[i] && pixel_x < pickup_x[i] + 10'd14 &&
-                pixel_y >= pickup_y[i] && pixel_y < pickup_y[i] + 9'd14) begin
-                pickup_on = 1'b1;
-                pickup_lx = pixel_x - pickup_x[i];
-                pickup_ly = pixel_y - pickup_y[i];
+        if (world_pixel) begin
+            for (i = 0; i < 8; i = i + 1) begin
+                if (!pickup_on && pickup_active[i] &&
+                    pixel_x >= pickup_x[i] && pixel_x < pickup_x[i] + 10'd14 &&
+                    pixel_y >= pickup_y[i] && pixel_y < pickup_y[i] + 9'd14) begin
+                    pickup_on = 1'b1;
+                    pickup_lx = pixel_x - pickup_x[i];
+                    pickup_ly = pixel_y - pickup_y[i];
+                end
             end
         end
     end
 
-    wire neo_on = display_active &&
+    wire neo_on = world_pixel &&
                   pixel_x >= neo_x && pixel_x < neo_x + 10'd16 &&
                   pixel_y >= neo_y && pixel_y < neo_y + 9'd20;
     always @(*) begin
         neo_lx = pixel_x - neo_x;
         neo_ly = pixel_y - neo_y;
     end
-    wire trinity_on = display_active && pixel_x >= trinity_x && pixel_x < trinity_x + 10'd16 &&
+    wire trinity_on = world_pixel && pixel_x >= trinity_x && pixel_x < trinity_x + 10'd16 &&
                       pixel_y >= trinity_y && pixel_y < trinity_y + 9'd20;
-    wire red_on = display_active && pixel_x >= red_x && pixel_x < red_x + 10'd16 &&
+    wire red_on = world_pixel && pixel_x >= red_x && pixel_x < red_x + 10'd16 &&
                   pixel_y >= red_y && pixel_y < red_y + 9'd20;
-    wire terminal_on = display_active && pixel_x >= terminal_x && pixel_x < terminal_x + 10'd24 &&
+    wire terminal_on = world_pixel && pixel_x >= terminal_x && pixel_x < terminal_x + 10'd24 &&
                        pixel_y >= terminal_y && pixel_y < terminal_y + 9'd24;
-    wire phone_on = display_active && pixel_x >= phone_x && pixel_x < phone_x + 10'd24 &&
+    wire phone_on = world_pixel && pixel_x >= phone_x && pixel_x < phone_x + 10'd24 &&
                     pixel_y >= phone_y && pixel_y < phone_y + 9'd36;
-    wire hud_on = display_active && (pixel_y >= 9'd456);
+    wire hud_on = play_pixel && (pixel_y >= 10'd456);
 
     function [11:0] tile_color;
         input [2:0] tile;
@@ -287,7 +301,7 @@ module slot3_renderer (
 
         if (!display_active || !selected) begin
             vga_r = 4'h0; vga_g = 4'h0; vga_b = 4'h0;
-        end else if (state == ST_START || state == ST_WIN || state == ST_LOSE) begin
+        end else if (state == ST_START || state == ST_LOAD || state == ST_WIN || state == ST_LOSE) begin
             vga_r = 4'h0; vga_g = 4'h1; vga_b = 4'h0;
             if (text_hit) begin
                 if (state == ST_LOSE) begin
@@ -368,10 +382,10 @@ module slot3_renderer (
                     vga_r = 4'h5; vga_g = 4'hF; vga_b = 4'h7;
                 end
                 if (pixel_y >= 10'd460 && pixel_y < 10'd467) begin
-                    if (pixel_x >= 10'd368 && pixel_x < 10'd373 && hud_digit_pixel(ammo / 10, pixel_x - 10'd368, pixel_y - 10'd460)) begin
+                    if (pixel_x >= 10'd368 && pixel_x < 10'd373 && hud_digit_pixel(ammo_tens, pixel_x - 10'd368, pixel_y - 10'd460)) begin
                         vga_r = 4'hF; vga_g = 4'hF; vga_b = 4'h6;
                     end
-                    if (pixel_x >= 10'd374 && pixel_x < 10'd379 && hud_digit_pixel(ammo % 10, pixel_x - 10'd374, pixel_y - 10'd460)) begin
+                    if (pixel_x >= 10'd374 && pixel_x < 10'd379 && hud_digit_pixel(ammo_ones, pixel_x - 10'd374, pixel_y - 10'd460)) begin
                         vga_r = 4'hF; vga_g = 4'hF; vga_b = 4'h6;
                     end
                     if (pixel_x >= 10'd448 && pixel_x < 10'd453 && hud_digit_pixel({1'b0, rescued}, pixel_x - 10'd448, pixel_y - 10'd460)) begin

@@ -3,8 +3,8 @@ module slot2_input (
     input  wire       reset,
     input  wire       selected,
     input  wire       frame_tick,
-    input  wire       ps2_clk,
-    input  wire       ps2_data,
+    input  wire       ps2_byte_ready,
+    input  wire [7:0] ps2_byte_data,
     input  wire       btn_l,
     input  wire       btn_r,
     input  wire       btn_d,
@@ -20,8 +20,6 @@ module slot2_input (
     localparam DAS_INIT  = 5'd10;
     localparam DAS_REPEAT = 5'd3;
 
-    wire       ps2_ready;
-    wire [7:0] ps2_byte;
     reg        ps2_break;
     reg        ps2_ext;
     reg        key_w;
@@ -45,15 +43,6 @@ module slot2_input (
     wire down_in = btn_d | key_s | key_down;
     wire rotate_in = btn_u | key_w | key_up;
     wire hard_in = btn_c | key_c;
-
-    console_ps2_rx u_ps2_rx (
-        .clk(clk),
-        .reset(reset | ~selected),
-        .ps2_clk(ps2_clk),
-        .ps2_data(ps2_data),
-        .byte_ready(ps2_ready),
-        .byte_data(ps2_byte)
-    );
 
     always @(posedge clk) begin
         if (reset) begin
@@ -95,13 +84,13 @@ module slot2_input (
             hard_drop <= 1'b0;
 
             if (selected) begin
-                if (ps2_ready) begin
-                    if (ps2_byte == 8'hF0) begin
+                if (ps2_byte_ready) begin
+                    if (ps2_byte_data == 8'hF0) begin
                         ps2_break <= 1'b1;
-                    end else if (ps2_byte == 8'hE0) begin
+                    end else if (ps2_byte_data == 8'hE0) begin
                         ps2_ext <= 1'b1;
                     end else begin
-                        case (ps2_byte)
+                        case (ps2_byte_data)
                             8'h1D: key_w     <= ~ps2_break;
                             8'h1C: key_a     <= ~ps2_break;
                             8'h1B: key_s     <= ~ps2_break;

@@ -1,11 +1,7 @@
 ## 快速上板脚本使用方法
 ##
-## 首次编译（完整流程，较慢）：
+## 完整编译：
 ##   vivado -mode batch -source scripts/build_bitstream.tcl
-##
-## 后续增量编译（只重编变化部分，快很多）：
-##   vivado -mode batch -source scripts/build_bitstream.tcl
-##   （脚本会自动检测并使用上次的 checkpoint）
 ##
 ## 编译完成后 bitstream 在：
 ##   build/vivado/game_console_top.bit
@@ -19,6 +15,22 @@ set top "game_console_top"
 set bit_file "$proj_dir/${top}.bit"
 set synth_dcp "$proj_dir/${top}_synth.dcp"
 set impl_dcp "$proj_dir/${top}_impl.dcp"
+set build_define ""
+
+if {[info exists ::env(GAME_CONSOLE_BUILD)]} {
+    switch -- [string tolower $::env(GAME_CONSOLE_BUILD)] {
+        tank  { set build_define "BUILD_TANK_ONLY" }
+        slot1 { set build_define "BUILD_SLOT1_ONLY" }
+        slot2 { set build_define "BUILD_SLOT2_ONLY" }
+        slot3 { set build_define "BUILD_SLOT3_ONLY" }
+        slot4 { set build_define "BUILD_SLOT4_ONLY" }
+        menu  { set build_define "BUILD_MENU_ONLY" }
+        full  { set build_define "" }
+        default {
+            puts "WARNING: unknown GAME_CONSOLE_BUILD=$::env(GAME_CONSOLE_BUILD), using full build"
+        }
+    }
+}
 
 file mkdir $proj_dir
 
@@ -26,7 +38,12 @@ file mkdir $proj_dir
 set verilog_files [glob -directory src {common/*.v} {games/**/*.v} game_console_top.v]
 
 # 读取设计
-read_verilog $verilog_files
+if {$build_define ne ""} {
+    puts "Using synthesis define: $build_define"
+    read_verilog -define $build_define $verilog_files
+} else {
+    read_verilog $verilog_files
+}
 read_xdc constraints/game_console.xdc
 
 # Synthesis

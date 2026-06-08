@@ -6,15 +6,15 @@ nexys_game_console/
 │  ├─ game_console_top.v          # 总顶层，负责键盘菜单和输出复用
 │  ├─ common/
 │  │  ├─ console_vga_sync.v       # 统一 640x480 VGA 时序
-│  │  ├─ console_ps2_rx.v         # 集合机菜单 PS/2 接收
+│  │  ├─ console_ps2_rx.v         # 集合机共享 PS/2 byte 接收
 │  │  ├─ console_menu_controller.v # 菜单状态机
 │  │  ├─ console_menu_renderer.v  # VGA 菜单渲染
 │  │  └─ blank_game_slot.v        # 空槽位占位画面
 │  └─ games/
 │     ├─ tank/
-│     │  └─ tank_top.v            # legacy 坦克顶层，由 slot1 包装接入
+│     │  └─ tank_top.v            # 坦克大战主体，复用集合机 VGA/PS2 公共接口
 │     ├─ slot1/
-│     │  └─ game_slot1_top.v      # 坦克大战槽位包装
+│     │  └─ game_slot1_top.v      # 坦克大战槽位适配
 │     ├─ slot2/
 │     │  └─ game_slot2_top.v
 │     ├─ slot3/

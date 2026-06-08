@@ -205,35 +205,6 @@ module slot2_renderer (
         end
     endfunction
 
-    // check if pixel is on for a single character at (tx,ty) with scale
-    function char_on;
-        input [9:0] px;
-        input [9:0] py;
-        input [7:0] ch;
-        input [9:0] tx;
-        input [9:0] ty;
-        input [2:0] sc;
-        reg signed [10:0] rx, ry;
-        reg [2:0] gx, gy;
-        reg [7:0] glyph;
-        begin
-            rx = {1'b0, px} - {1'b0, tx};
-            ry = {1'b0, py} - {1'b0, ty};
-            if (rx >= 0 && ry >= 0 && rx < 8*sc && ry < 7*sc) begin
-                case (sc)
-                    3'd1: begin gx = rx[2:0]; gy = ry[2:0]; end
-                    3'd2: begin gx = rx[3:1]; gy = ry[3:1]; end
-                    3'd4: begin gx = rx[4:2]; gy = ry[4:2]; end
-                    default: begin gx = rx[2:0]; gy = ry[2:0]; end
-                endcase
-                glyph = glyph_row(ch, gy[2:0]);
-                char_on = glyph[7 - gx[2:0]];
-            end else begin
-                char_on = 1'b0;
-            end
-        end
-    endfunction
-
     // piece shape ROM
     function [15:0] piece_shape;
         input [2:0] pt;
@@ -282,6 +253,285 @@ module slot2_renderer (
         end
     endfunction
 
+    function [7:0] fixed_text_char;
+        input [3:0] msg_id;
+        input [4:0] idx;
+        begin
+            fixed_text_char = " ";
+            case (msg_id)
+                4'd0: begin
+                    case (idx)
+                        5'd0: fixed_text_char = "N";
+                        5'd1: fixed_text_char = "E";
+                        5'd2: fixed_text_char = "X";
+                        5'd3: fixed_text_char = "T";
+                        default: fixed_text_char = " ";
+                    endcase
+                end
+                4'd1: begin
+                    case (idx)
+                        5'd0: fixed_text_char = "S";
+                        5'd1: fixed_text_char = "C";
+                        5'd2: fixed_text_char = "O";
+                        5'd3: fixed_text_char = "R";
+                        5'd4: fixed_text_char = "E";
+                        default: fixed_text_char = " ";
+                    endcase
+                end
+                4'd2: begin
+                    case (idx)
+                        5'd0: fixed_text_char = "L";
+                        5'd1: fixed_text_char = "I";
+                        5'd2: fixed_text_char = "N";
+                        5'd3: fixed_text_char = "E";
+                        5'd4: fixed_text_char = "S";
+                        default: fixed_text_char = " ";
+                    endcase
+                end
+                4'd3: begin
+                    case (idx)
+                        5'd0: fixed_text_char = "L";
+                        5'd1: fixed_text_char = "E";
+                        5'd2: fixed_text_char = "V";
+                        5'd3: fixed_text_char = "E";
+                        5'd4: fixed_text_char = "L";
+                        default: fixed_text_char = " ";
+                    endcase
+                end
+                4'd4: begin
+                    case (idx)
+                        5'd0: fixed_text_char = "A";
+                        5'd1: fixed_text_char = "/";
+                        5'd2: fixed_text_char = "D";
+                        5'd3: fixed_text_char = ":";
+                        5'd4: fixed_text_char = "M";
+                        5'd5: fixed_text_char = "O";
+                        5'd6: fixed_text_char = "V";
+                        5'd7: fixed_text_char = "E";
+                        5'd8: fixed_text_char = " ";
+                        5'd9: fixed_text_char = "W";
+                        5'd10: fixed_text_char = ":";
+                        5'd11: fixed_text_char = "R";
+                        5'd12: fixed_text_char = "O";
+                        5'd13: fixed_text_char = "T";
+                        default: fixed_text_char = " ";
+                    endcase
+                end
+                4'd5: begin
+                    case (idx)
+                        5'd0: fixed_text_char = "S";
+                        5'd1: fixed_text_char = ":";
+                        5'd2: fixed_text_char = "H";
+                        5'd3: fixed_text_char = "A";
+                        5'd4: fixed_text_char = "R";
+                        5'd5: fixed_text_char = "D";
+                        5'd6: fixed_text_char = " ";
+                        5'd7: fixed_text_char = "B";
+                        5'd8: fixed_text_char = "T";
+                        5'd9: fixed_text_char = "N";
+                        5'd10: fixed_text_char = " ";
+                        5'd11: fixed_text_char = "D";
+                        5'd12: fixed_text_char = ":";
+                        5'd13: fixed_text_char = "S";
+                        5'd14: fixed_text_char = "O";
+                        5'd15: fixed_text_char = "F";
+                        5'd16: fixed_text_char = "T";
+                        default: fixed_text_char = " ";
+                    endcase
+                end
+                4'd6: begin
+                    case (idx)
+                        5'd0: fixed_text_char = "E";
+                        5'd1: fixed_text_char = "S";
+                        5'd2: fixed_text_char = "C";
+                        5'd3: fixed_text_char = ":";
+                        5'd4: fixed_text_char = "B";
+                        5'd5: fixed_text_char = "A";
+                        5'd6: fixed_text_char = "C";
+                        5'd7: fixed_text_char = "K";
+                        default: fixed_text_char = " ";
+                    endcase
+                end
+                4'd7: begin
+                    case (idx)
+                        5'd0: fixed_text_char = "G";
+                        5'd1: fixed_text_char = "A";
+                        5'd2: fixed_text_char = "M";
+                        5'd3: fixed_text_char = "E";
+                        default: fixed_text_char = " ";
+                    endcase
+                end
+                4'd8: begin
+                    case (idx)
+                        5'd0: fixed_text_char = "O";
+                        5'd1: fixed_text_char = "V";
+                        5'd2: fixed_text_char = "E";
+                        5'd3: fixed_text_char = "R";
+                        default: fixed_text_char = " ";
+                    endcase
+                end
+                default: begin
+                    case (idx)
+                        5'd0: fixed_text_char = "C";
+                        5'd1: fixed_text_char = "P";
+                        5'd2: fixed_text_char = "U";
+                        5'd3: fixed_text_char = " ";
+                        5'd4: fixed_text_char = "R";
+                        5'd5: fixed_text_char = "E";
+                        5'd6: fixed_text_char = "S";
+                        5'd7: fixed_text_char = "E";
+                        5'd8: fixed_text_char = "T";
+                        5'd9: fixed_text_char = " ";
+                        5'd10: fixed_text_char = "T";
+                        5'd11: fixed_text_char = "O";
+                        5'd12: fixed_text_char = " ";
+                        5'd13: fixed_text_char = "R";
+                        5'd14: fixed_text_char = "E";
+                        5'd15: fixed_text_char = "S";
+                        5'd16: fixed_text_char = "T";
+                        5'd17: fixed_text_char = "A";
+                        5'd18: fixed_text_char = "R";
+                        5'd19: fixed_text_char = "T";
+                        default: fixed_text_char = " ";
+                    endcase
+                end
+            endcase
+        end
+    endfunction
+
+    function [7:0] digit_text_char;
+        input [1:0] msg_id;
+        input [2:0] idx;
+        begin
+            digit_text_char = " ";
+            case (msg_id)
+                2'd0: begin
+                    case (idx)
+                        3'd0: digit_text_char = d2c(score5);
+                        3'd1: digit_text_char = d2c(score4);
+                        3'd2: digit_text_char = d2c(score3);
+                        3'd3: digit_text_char = d2c(score2);
+                        3'd4: digit_text_char = d2c(score1);
+                        3'd5: digit_text_char = d2c(score0);
+                        default: digit_text_char = " ";
+                    endcase
+                end
+                2'd1: begin
+                    case (idx)
+                        3'd0: digit_text_char = d2c(lines2);
+                        3'd1: digit_text_char = d2c(lines1);
+                        3'd2: digit_text_char = d2c(lines0);
+                        default: digit_text_char = " ";
+                    endcase
+                end
+                default: begin
+                    case (idx)
+                        3'd0: digit_text_char = d2c(lvl1);
+                        3'd1: digit_text_char = d2c(lvl0);
+                        default: digit_text_char = " ";
+                    endcase
+                end
+            endcase
+        end
+    endfunction
+
+    function text_on;
+        input [9:0] px;
+        input [9:0] py;
+        input [9:0] tx;
+        input [9:0] ty;
+        input [2:0] sc;
+        input [3:0] msg_id;
+        input [4:0] char_count;
+        reg signed [10:0] rx;
+        reg signed [10:0] ry;
+        reg [6:0] char_idx;
+        reg [2:0] gx;
+        reg [2:0] gy;
+        reg [7:0] glyph;
+        reg y_in;
+        begin
+            rx = $signed({1'b0, px}) - $signed({1'b0, tx});
+            ry = $signed({1'b0, py}) - $signed({1'b0, ty});
+            char_idx = 5'd0;
+            gx = 3'd0;
+            gy = 3'd0;
+            y_in = 1'b0;
+            text_on = 1'b0;
+
+            if ((rx >= 11'sd0) && (ry >= 11'sd0)) begin
+                case (sc)
+                    3'd2: begin
+                        char_idx = rx[10:4];
+                        gx = rx[3:1];
+                        gy = ry[3:1];
+                        y_in = (ry < 11'sd14);
+                    end
+                    3'd4: begin
+                        char_idx = rx[10:5];
+                        gx = rx[4:2];
+                        gy = ry[4:2];
+                        y_in = (ry < 11'sd28);
+                    end
+                    default: begin
+                        char_idx = rx[10:3];
+                        gx = rx[2:0];
+                        gy = ry[2:0];
+                        y_in = (ry < 11'sd7);
+                    end
+                endcase
+
+                if (y_in && (char_idx < {2'b00, char_count})) begin
+                    glyph = glyph_row(fixed_text_char(msg_id, char_idx[4:0]), gy);
+                    text_on = glyph[7 - gx];
+                end
+            end
+        end
+    endfunction
+
+    function digit_text_on;
+        input [9:0] px;
+        input [9:0] py;
+        input [9:0] tx;
+        input [9:0] ty;
+        input [1:0] msg_id;
+        input [2:0] char_count;
+        reg signed [10:0] rx;
+        reg signed [10:0] ry;
+        reg [5:0] char_idx;
+        reg [2:0] gx;
+        reg [2:0] gy;
+        reg [7:0] glyph;
+        begin
+            rx = $signed({1'b0, px}) - $signed({1'b0, tx});
+            ry = $signed({1'b0, py}) - $signed({1'b0, ty});
+            char_idx = rx[10:4];
+            gx = rx[3:1];
+            gy = ry[3:1];
+            digit_text_on = 1'b0;
+
+            if ((rx >= 11'sd0) && (ry >= 11'sd0) &&
+                (ry < 11'sd14) && (char_idx < {3'b000, char_count})) begin
+                glyph = glyph_row(digit_text_char(msg_id, char_idx[2:0]), gy);
+                digit_text_on = glyph[7 - gx];
+            end
+        end
+    endfunction
+
+    function [9:0] mul20_5;
+        input [4:0] value;
+        begin
+            mul20_5 = ({5'd0, value} << 4) + ({5'd0, value} << 2);
+        end
+    endfunction
+
+    function [9:0] mul10_5;
+        input [4:0] value;
+        begin
+            mul10_5 = ({5'd0, value} << 3) + ({5'd0, value} << 1);
+        end
+    endfunction
+
     // signals for board area
     wire in_board;
     wire [9:0] bx, by;
@@ -326,9 +576,9 @@ module slot2_renderer (
                     (by < 10'd340) ? 5'd16 :
                     (by < 10'd360) ? 5'd17 :
                     (by < 10'd380) ? 5'd18 : 5'd19;
-    assign cell_px = bx - (cell_x * 5'd20);
-    assign cell_py = by - (cell_y * 5'd20);
-    assign board_idx = cell_y * 5'd10 + {6'd0, cell_x};
+    assign cell_px = bx - mul20_5(cell_x);
+    assign cell_py = by - mul20_5(cell_y);
+    assign board_idx = mul10_5(cell_y) + {5'd0, cell_x};
     assign placed = (cell_x < 5'd10 && cell_y < 6'd20) ? board[board_idx] : 1'b0;
 
     assign pc_color = piece_rgb(piece_type);
@@ -352,20 +602,21 @@ module slot2_renderer (
         input [1:0] pr;
         input signed [4:0] pxo;
         input [5:0] pyo;
-        integer ri, ci;
         reg [15:0] ps;
-        reg signed [5:0] block_x;
+        reg signed [5:0] rel_x;
+        reg [5:0] rel_y;
+        reg [3:0] shape_bit_idx;
         begin
             ps = piece_shape(pt, pr);
-            piece_block_on = 1'b0;
-            for (ri = 0; ri < 4; ri = ri + 1) begin
-                for (ci = 0; ci < 4; ci = ci + 1) begin
-                    if (ps[ri*4 + ci]) begin
-                        block_x = pxo + ci;
-                        if (block_x >= 0 && block_x < 10 && cx == block_x[4:0] && cy == (pyo + ri[1:0]))
-                            piece_block_on = 1'b1;
-                    end
-                end
+            rel_x = $signed({1'b0, cx}) - pxo;
+            rel_y = cy - pyo;
+            shape_bit_idx = {rel_y[1:0], rel_x[1:0]};
+
+            if ((rel_x >= 6'sd0) && (rel_x < 6'sd4) &&
+                (cy >= pyo) && (rel_y < 6'd4)) begin
+                piece_block_on = ps[shape_bit_idx];
+            end else begin
+                piece_block_on = 1'b0;
             end
         end
     endfunction
@@ -426,11 +677,7 @@ module slot2_renderer (
             end
 
             // === side panel text ===
-            // "NEXT" at (290, 50), scale 2
-            if (char_on(pixel_x,pixel_y,"N",10'd290,10'd50,3'd2) ||
-                char_on(pixel_x,pixel_y,"E",10'd306,10'd50,3'd2) ||
-                char_on(pixel_x,pixel_y,"X",10'd322,10'd50,3'd2) ||
-                char_on(pixel_x,pixel_y,"T",10'd338,10'd50,3'd2)) begin
+            if (text_on(pixel_x, pixel_y, 10'd290, 10'd50, 3'd2, 4'd0, 5'd4)) begin
                 vga_r = 4'hF; vga_g = 4'hD; vga_b = 4'h6;
             end
 
@@ -442,93 +689,36 @@ module slot2_renderer (
                 end
             end
 
-            // "SCORE" at (290, 160), scale 2
-            if (char_on(pixel_x,pixel_y,"S",10'd290,10'd160,3'd2) ||
-                char_on(pixel_x,pixel_y,"C",10'd306,10'd160,3'd2) ||
-                char_on(pixel_x,pixel_y,"O",10'd322,10'd160,3'd2) ||
-                char_on(pixel_x,pixel_y,"R",10'd338,10'd160,3'd2) ||
-                char_on(pixel_x,pixel_y,"E",10'd354,10'd160,3'd2)) begin
+            if (text_on(pixel_x, pixel_y, 10'd290, 10'd160, 3'd2, 4'd1, 5'd5)) begin
                 vga_r = 4'hF; vga_g = 4'hF; vga_b = 4'hF;
             end
 
-            // score value at (290, 180), scale 2
-            if (char_on(pixel_x,pixel_y,d2c(score5),10'd290,10'd180,3'd2)) {vga_r,vga_g,vga_b} = 12'hFFF;
-            if (char_on(pixel_x,pixel_y,d2c(score4),10'd306,10'd180,3'd2)) {vga_r,vga_g,vga_b} = 12'hFFF;
-            if (char_on(pixel_x,pixel_y,d2c(score3),10'd322,10'd180,3'd2)) {vga_r,vga_g,vga_b} = 12'hFFF;
-            if (char_on(pixel_x,pixel_y,d2c(score2),10'd338,10'd180,3'd2)) {vga_r,vga_g,vga_b} = 12'hFFF;
-            if (char_on(pixel_x,pixel_y,d2c(score1),10'd354,10'd180,3'd2)) {vga_r,vga_g,vga_b} = 12'hFFF;
-            if (char_on(pixel_x,pixel_y,d2c(score0),10'd370,10'd180,3'd2)) {vga_r,vga_g,vga_b} = 12'hFFF;
+            if (digit_text_on(pixel_x, pixel_y, 10'd290, 10'd180, 2'd0, 3'd6)) begin
+                {vga_r, vga_g, vga_b} = 12'hFFF;
+            end
 
-            // "LINES" at (290, 230), scale 2
-            if (char_on(pixel_x,pixel_y,"L",10'd290,10'd230,3'd2) ||
-                char_on(pixel_x,pixel_y,"I",10'd306,10'd230,3'd2) ||
-                char_on(pixel_x,pixel_y,"N",10'd322,10'd230,3'd2) ||
-                char_on(pixel_x,pixel_y,"E",10'd338,10'd230,3'd2) ||
-                char_on(pixel_x,pixel_y,"S",10'd354,10'd230,3'd2)) begin
+            if (text_on(pixel_x, pixel_y, 10'd290, 10'd230, 3'd2, 4'd2, 5'd5)) begin
                 vga_r = 4'hF; vga_g = 4'hF; vga_b = 4'hF;
             end
 
-            // lines value at (290, 250), scale 2
-            if (char_on(pixel_x,pixel_y,d2c(lines2),10'd290,10'd250,3'd2)) {vga_r,vga_g,vga_b} = 12'hFFF;
-            if (char_on(pixel_x,pixel_y,d2c(lines1),10'd306,10'd250,3'd2)) {vga_r,vga_g,vga_b} = 12'hFFF;
-            if (char_on(pixel_x,pixel_y,d2c(lines0),10'd322,10'd250,3'd2)) {vga_r,vga_g,vga_b} = 12'hFFF;
+            if (digit_text_on(pixel_x, pixel_y, 10'd290, 10'd250, 2'd1, 3'd3)) begin
+                {vga_r, vga_g, vga_b} = 12'hFFF;
+            end
 
-            // "LEVEL" at (290, 300), scale 2
-            if (char_on(pixel_x,pixel_y,"L",10'd290,10'd300,3'd2) ||
-                char_on(pixel_x,pixel_y,"E",10'd306,10'd300,3'd2) ||
-                char_on(pixel_x,pixel_y,"V",10'd322,10'd300,3'd2) ||
-                char_on(pixel_x,pixel_y,"E",10'd338,10'd300,3'd2) ||
-                char_on(pixel_x,pixel_y,"L",10'd354,10'd300,3'd2)) begin
+            if (text_on(pixel_x, pixel_y, 10'd290, 10'd300, 3'd2, 4'd3, 5'd5)) begin
                 vga_r = 4'hF; vga_g = 4'hF; vga_b = 4'hF;
             end
 
-            // level value at (290, 320), scale 2
-            if (char_on(pixel_x,pixel_y,d2c(lvl1),10'd290,10'd320,3'd2)) {vga_r,vga_g,vga_b} = 12'hFFF;
-            if (char_on(pixel_x,pixel_y,d2c(lvl0),10'd306,10'd320,3'd2)) {vga_r,vga_g,vga_b} = 12'hFFF;
+            if (digit_text_on(pixel_x, pixel_y, 10'd290, 10'd320, 2'd2, 3'd2)) begin
+                {vga_r, vga_g, vga_b} = 12'hFFF;
+            end
 
             // === controls hint ===
-            // "A/D:MOVE W:ROT" at (270, 380), scale 1
-            if (char_on(pixel_x,pixel_y,"A",10'd270,10'd380,3'd1)) {vga_r,vga_g,vga_b}=12'hAAA;
-            if (char_on(pixel_x,pixel_y,"/",10'd278,10'd380,3'd1)) {vga_r,vga_g,vga_b}=12'hAAA;
-            if (char_on(pixel_x,pixel_y,"D",10'd286,10'd380,3'd1)) {vga_r,vga_g,vga_b}=12'hAAA;
-            if (char_on(pixel_x,pixel_y,":",10'd294,10'd380,3'd1)) {vga_r,vga_g,vga_b}=12'hAAA;
-            if (char_on(pixel_x,pixel_y,"M",10'd302,10'd380,3'd1)) {vga_r,vga_g,vga_b}=12'hAAA;
-            if (char_on(pixel_x,pixel_y,"O",10'd310,10'd380,3'd1)) {vga_r,vga_g,vga_b}=12'hAAA;
-            if (char_on(pixel_x,pixel_y,"V",10'd318,10'd380,3'd1)) {vga_r,vga_g,vga_b}=12'hAAA;
-            if (char_on(pixel_x,pixel_y,"E",10'd326,10'd380,3'd1)) {vga_r,vga_g,vga_b}=12'hAAA;
-            if (char_on(pixel_x,pixel_y," ",10'd334,10'd380,3'd1)) {vga_r,vga_g,vga_b}=12'hAAA;
-            if (char_on(pixel_x,pixel_y,"W",10'd342,10'd380,3'd1)) {vga_r,vga_g,vga_b}=12'hAAA;
-            if (char_on(pixel_x,pixel_y,":",10'd350,10'd380,3'd1)) {vga_r,vga_g,vga_b}=12'hAAA;
-            if (char_on(pixel_x,pixel_y,"R",10'd358,10'd380,3'd1)) {vga_r,vga_g,vga_b}=12'hAAA;
-            if (char_on(pixel_x,pixel_y,"O",10'd366,10'd380,3'd1)) {vga_r,vga_g,vga_b}=12'hAAA;
-            if (char_on(pixel_x,pixel_y,"T",10'd374,10'd380,3'd1)) {vga_r,vga_g,vga_b}=12'hAAA;
-            // "S:HARD BTN D:SOFT" at (270, 392), scale 1
-            if (char_on(pixel_x,pixel_y,"S",10'd270,10'd392,3'd1)) {vga_r,vga_g,vga_b}=12'hAAA;
-            if (char_on(pixel_x,pixel_y,":",10'd278,10'd392,3'd1)) {vga_r,vga_g,vga_b}=12'hAAA;
-            if (char_on(pixel_x,pixel_y,"H",10'd286,10'd392,3'd1)) {vga_r,vga_g,vga_b}=12'hAAA;
-            if (char_on(pixel_x,pixel_y,"A",10'd294,10'd392,3'd1)) {vga_r,vga_g,vga_b}=12'hAAA;
-            if (char_on(pixel_x,pixel_y,"R",10'd302,10'd392,3'd1)) {vga_r,vga_g,vga_b}=12'hAAA;
-            if (char_on(pixel_x,pixel_y,"D",10'd310,10'd392,3'd1)) {vga_r,vga_g,vga_b}=12'hAAA;
-            if (char_on(pixel_x,pixel_y," ",10'd318,10'd392,3'd1)) {vga_r,vga_g,vga_b}=12'hAAA;
-            if (char_on(pixel_x,pixel_y,"B",10'd326,10'd392,3'd1)) {vga_r,vga_g,vga_b}=12'hAAA;
-            if (char_on(pixel_x,pixel_y,"T",10'd334,10'd392,3'd1)) {vga_r,vga_g,vga_b}=12'hAAA;
-            if (char_on(pixel_x,pixel_y,"N",10'd342,10'd392,3'd1)) {vga_r,vga_g,vga_b}=12'hAAA;
-            if (char_on(pixel_x,pixel_y," ",10'd350,10'd392,3'd1)) {vga_r,vga_g,vga_b}=12'hAAA;
-            if (char_on(pixel_x,pixel_y,"D",10'd358,10'd392,3'd1)) {vga_r,vga_g,vga_b}=12'hAAA;
-            if (char_on(pixel_x,pixel_y,":",10'd366,10'd392,3'd1)) {vga_r,vga_g,vga_b}=12'hAAA;
-            if (char_on(pixel_x,pixel_y,"S",10'd374,10'd392,3'd1)) {vga_r,vga_g,vga_b}=12'hAAA;
-            if (char_on(pixel_x,pixel_y,"O",10'd382,10'd392,3'd1)) {vga_r,vga_g,vga_b}=12'hAAA;
-            if (char_on(pixel_x,pixel_y,"F",10'd390,10'd392,3'd1)) {vga_r,vga_g,vga_b}=12'hAAA;
-            if (char_on(pixel_x,pixel_y,"T",10'd398,10'd392,3'd1)) {vga_r,vga_g,vga_b}=12'hAAA;
-            // "ESC : BACK" at (270, 404), scale 1
-            if (char_on(pixel_x,pixel_y,"E",10'd270,10'd404,3'd1)) {vga_r,vga_g,vga_b}=12'hAAA;
-            if (char_on(pixel_x,pixel_y,"S",10'd278,10'd404,3'd1)) {vga_r,vga_g,vga_b}=12'hAAA;
-            if (char_on(pixel_x,pixel_y,"C",10'd286,10'd404,3'd1)) {vga_r,vga_g,vga_b}=12'hAAA;
-            if (char_on(pixel_x,pixel_y,":",10'd294,10'd404,3'd1)) {vga_r,vga_g,vga_b}=12'hAAA;
-            if (char_on(pixel_x,pixel_y,"B",10'd302,10'd404,3'd1)) {vga_r,vga_g,vga_b}=12'hAAA;
-            if (char_on(pixel_x,pixel_y,"A",10'd310,10'd404,3'd1)) {vga_r,vga_g,vga_b}=12'hAAA;
-            if (char_on(pixel_x,pixel_y,"C",10'd318,10'd404,3'd1)) {vga_r,vga_g,vga_b}=12'hAAA;
-            if (char_on(pixel_x,pixel_y,"K",10'd326,10'd404,3'd1)) {vga_r,vga_g,vga_b}=12'hAAA;
+            if (text_on(pixel_x, pixel_y, 10'd270, 10'd380, 3'd1, 4'd4, 5'd14) ||
+                text_on(pixel_x, pixel_y, 10'd270, 10'd392, 3'd1, 4'd5, 5'd17) ||
+                text_on(pixel_x, pixel_y, 10'd270, 10'd404, 3'd1, 4'd6, 5'd8)) begin
+                {vga_r, vga_g, vga_b} = 12'hAAA;
+            end
 
             // === game over overlay ===
             if (game_over) begin
@@ -540,38 +730,14 @@ module slot2_renderer (
                     vga_b = vga_b >> 2;
                 end
 
-                // "GAME" at (230, 180), scale 4
-                if (char_on(pixel_x,pixel_y,"G",10'd230,10'd180,3'd4)) begin vga_r=4'hF;vga_g=4'h0;vga_b=4'h0; end
-                if (char_on(pixel_x,pixel_y,"A",10'd262,10'd180,3'd4)) begin vga_r=4'hF;vga_g=4'h0;vga_b=4'h0; end
-                if (char_on(pixel_x,pixel_y,"M",10'd294,10'd180,3'd4)) begin vga_r=4'hF;vga_g=4'h0;vga_b=4'h0; end
-                if (char_on(pixel_x,pixel_y,"E",10'd326,10'd180,3'd4)) begin vga_r=4'hF;vga_g=4'h0;vga_b=4'h0; end
-                // "OVER" at (250, 230), scale 4
-                if (char_on(pixel_x,pixel_y,"O",10'd250,10'd230,3'd4)) begin vga_r=4'hF;vga_g=4'h0;vga_b=4'h0; end
-                if (char_on(pixel_x,pixel_y,"V",10'd282,10'd230,3'd4)) begin vga_r=4'hF;vga_g=4'h0;vga_b=4'h0; end
-                if (char_on(pixel_x,pixel_y,"E",10'd314,10'd230,3'd4)) begin vga_r=4'hF;vga_g=4'h0;vga_b=4'h0; end
-                if (char_on(pixel_x,pixel_y,"R",10'd346,10'd230,3'd4)) begin vga_r=4'hF;vga_g=4'h0;vga_b=4'h0; end
+                if (text_on(pixel_x, pixel_y, 10'd230, 10'd180, 3'd4, 4'd7, 5'd4) ||
+                    text_on(pixel_x, pixel_y, 10'd250, 10'd230, 3'd4, 4'd8, 5'd4)) begin
+                    {vga_r, vga_g, vga_b} = 12'hF00;
+                end
 
-                // "PRESS CPU_RESET TO RESTART" at (235, 290), scale 1
-                if (char_on(pixel_x,pixel_y,"C",10'd240,10'd290,3'd1)) begin vga_r=4'hF;vga_g=4'hF;vga_b=4'hF; end
-                if (char_on(pixel_x,pixel_y,"P",10'd248,10'd290,3'd1)) begin vga_r=4'hF;vga_g=4'hF;vga_b=4'hF; end
-                if (char_on(pixel_x,pixel_y,"U",10'd256,10'd290,3'd1)) begin vga_r=4'hF;vga_g=4'hF;vga_b=4'hF; end
-                if (char_on(pixel_x,pixel_y," ",10'd264,10'd290,3'd1)) begin vga_r=4'hF;vga_g=4'hF;vga_b=4'hF; end
-                if (char_on(pixel_x,pixel_y,"R",10'd272,10'd290,3'd1)) begin vga_r=4'hF;vga_g=4'hF;vga_b=4'hF; end
-                if (char_on(pixel_x,pixel_y,"E",10'd280,10'd290,3'd1)) begin vga_r=4'hF;vga_g=4'hF;vga_b=4'hF; end
-                if (char_on(pixel_x,pixel_y,"S",10'd288,10'd290,3'd1)) begin vga_r=4'hF;vga_g=4'hF;vga_b=4'hF; end
-                if (char_on(pixel_x,pixel_y,"E",10'd296,10'd290,3'd1)) begin vga_r=4'hF;vga_g=4'hF;vga_b=4'hF; end
-                if (char_on(pixel_x,pixel_y,"T",10'd304,10'd290,3'd1)) begin vga_r=4'hF;vga_g=4'hF;vga_b=4'hF; end
-                if (char_on(pixel_x,pixel_y," ",10'd312,10'd290,3'd1)) begin vga_r=4'hF;vga_g=4'hF;vga_b=4'hF; end
-                if (char_on(pixel_x,pixel_y,"T",10'd320,10'd290,3'd1)) begin vga_r=4'hF;vga_g=4'hF;vga_b=4'hF; end
-                if (char_on(pixel_x,pixel_y,"O",10'd328,10'd290,3'd1)) begin vga_r=4'hF;vga_g=4'hF;vga_b=4'hF; end
-                if (char_on(pixel_x,pixel_y," ",10'd336,10'd290,3'd1)) begin vga_r=4'hF;vga_g=4'hF;vga_b=4'hF; end
-                if (char_on(pixel_x,pixel_y,"R",10'd344,10'd290,3'd1)) begin vga_r=4'hF;vga_g=4'hF;vga_b=4'hF; end
-                if (char_on(pixel_x,pixel_y,"E",10'd352,10'd290,3'd1)) begin vga_r=4'hF;vga_g=4'hF;vga_b=4'hF; end
-                if (char_on(pixel_x,pixel_y,"S",10'd360,10'd290,3'd1)) begin vga_r=4'hF;vga_g=4'hF;vga_b=4'hF; end
-                if (char_on(pixel_x,pixel_y,"T",10'd368,10'd290,3'd1)) begin vga_r=4'hF;vga_g=4'hF;vga_b=4'hF; end
-                if (char_on(pixel_x,pixel_y,"A",10'd376,10'd290,3'd1)) begin vga_r=4'hF;vga_g=4'hF;vga_b=4'hF; end
-                if (char_on(pixel_x,pixel_y,"R",10'd384,10'd290,3'd1)) begin vga_r=4'hF;vga_g=4'hF;vga_b=4'hF; end
-                if (char_on(pixel_x,pixel_y,"T",10'd392,10'd290,3'd1)) begin vga_r=4'hF;vga_g=4'hF;vga_b=4'hF; end
+                if (text_on(pixel_x, pixel_y, 10'd240, 10'd290, 3'd1, 4'd9, 5'd20)) begin
+                    {vga_r, vga_g, vga_b} = 12'hFFF;
+                end
             end
         end
     end

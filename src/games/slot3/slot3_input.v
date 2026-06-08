@@ -2,8 +2,8 @@ module slot3_input (
     input  wire       clk,
     input  wire       reset,
     input  wire       selected,
-    input  wire       ps2_clk,
-    input  wire       ps2_data,
+    input  wire       ps2_byte_ready,
+    input  wire [7:0] ps2_byte_data,
     input  wire       btn_u,
     input  wire       btn_d,
     input  wire       btn_l,
@@ -22,8 +22,6 @@ module slot3_input (
     output wire       space_pulse
 );
 
-    wire       ps2_ready;
-    wire [7:0] ps2_byte;
     reg        ps2_break;
     reg        ps2_ext;
 
@@ -35,15 +33,6 @@ module slot3_input (
     reg btn_c_prev, key_enter_prev, key_space_prev;
     reg key_esc_prev, key_j_prev, key_k_prev;
     reg key_e_prev, key_q_prev;
-
-    console_ps2_rx u_ps2_rx (
-        .clk(clk),
-        .reset(reset | ~selected),
-        .ps2_clk(ps2_clk),
-        .ps2_data(ps2_data),
-        .byte_ready(ps2_ready),
-        .byte_data(ps2_byte)
-    );
 
     assign input_up    = btn_u | key_w | key_up;
     assign input_down  = btn_d | key_s | key_down;
@@ -81,13 +70,13 @@ module slot3_input (
             key_e_prev <= key_e;
             key_q_prev <= key_q;
 
-            if (ps2_ready) begin
-                if (ps2_byte == 8'hF0) begin
+            if (ps2_byte_ready) begin
+                if (ps2_byte_data == 8'hF0) begin
                     ps2_break <= 1'b1;
-                end else if (ps2_byte == 8'hE0) begin
+                end else if (ps2_byte_data == 8'hE0) begin
                     ps2_ext <= 1'b1;
                 end else begin
-                    case (ps2_byte)
+                    case (ps2_byte_data)
                         8'h1D: key_w     <= ~ps2_break;
                         8'h1C: key_a     <= ~ps2_break;
                         8'h1B: key_s     <= ~ps2_break;

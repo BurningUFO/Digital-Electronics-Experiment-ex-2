@@ -15,6 +15,8 @@ module game_slot4_top (
     input  wire [15:0] sw,
     input  wire        ps2_clk,
     input  wire        ps2_data,
+    input  wire        ps2_byte_ready,
+    input  wire [7:0]  ps2_byte_data,
     output reg  [3:0]  vga_r,
     output reg  [3:0]  vga_g,
     output reg  [3:0]  vga_b,
@@ -40,8 +42,8 @@ module game_slot4_top (
     localparam signed [5:0] MAX_FALL = 6'sd8;
     localparam signed [5:0] JUMP_VEL = -6'sd16;
     localparam integer MOVE_STEP = 3;
-    localparam integer COLLIDE_INSET_X = 2;
-    localparam integer COLLIDE_INSET_Y = 2;
+    localparam integer COLLIDE_INSET_X = 4;
+    localparam integer COLLIDE_INSET_Y = 4;
 
     localparam [3:0] TILE_EMPTY      = 4'd0;
     localparam [3:0] TILE_WALL       = 4'd1;
@@ -55,8 +57,157 @@ module game_slot4_top (
     localparam [3:0] TILE_BUTTON     = 4'd9;
     localparam [3:0] TILE_GATE       = 4'd10;
 
-    wire ps2_byte_ready;
-    wire [7:0] ps2_byte_data;
+    function [11:0] slot4_tile_addr;
+        input [1:0] lvl;
+        input [4:0] tx;
+        input [4:0] ty;
+        begin
+            slot4_tile_addr = {7'd0, tx} + ({2'd0, ty, 5'd0});
+            if (lvl == 2'd1)
+                slot4_tile_addr = slot4_tile_addr + 12'd768;
+            else if (lvl != 2'd0)
+                slot4_tile_addr = slot4_tile_addr + 12'd1536;
+        end
+    endfunction
+
+    (* rom_style = "distributed" *) reg [3:0] slot4_tile_rom [0:2303];
+
+    task slot4_set_tile;
+        input [1:0] lvl;
+        input [4:0] tx;
+        input [4:0] ty;
+        input [3:0] tile;
+        begin
+            slot4_tile_rom[slot4_tile_addr(lvl, tx, ty)] = tile;
+        end
+    endtask
+
+    task slot4_fill_hspan;
+        input [1:0] lvl;
+        input [4:0] ty;
+        input [4:0] x0;
+        input [4:0] x1;
+        input [3:0] tile;
+        integer fill_x;
+        begin
+            for (fill_x = x0; fill_x <= x1; fill_x = fill_x + 1)
+                slot4_set_tile(lvl, fill_x[4:0], ty, tile);
+        end
+    endtask
+
+    task slot4_fill_vspan;
+        input [1:0] lvl;
+        input [4:0] tx;
+        input [4:0] y0;
+        input [4:0] y1;
+        input [3:0] tile;
+        integer fill_y;
+        begin
+            for (fill_y = y0; fill_y <= y1; fill_y = fill_y + 1)
+                slot4_set_tile(lvl, tx, fill_y[4:0], tile);
+        end
+    endtask
+
+    integer init_i;
+    integer init_lvl;
+    integer init_pos;
+    initial begin
+        for (init_i = 0; init_i < 2304; init_i = init_i + 1)
+            slot4_tile_rom[init_i] = TILE_EMPTY;
+
+        for (init_lvl = 0; init_lvl < 3; init_lvl = init_lvl + 1) begin
+            for (init_pos = 0; init_pos < 32; init_pos = init_pos + 1) begin
+                slot4_set_tile(init_lvl[1:0], init_pos[4:0], 5'd0, TILE_WALL);
+                slot4_set_tile(init_lvl[1:0], init_pos[4:0], 5'd23, TILE_WALL);
+            end
+            for (init_pos = 0; init_pos < 24; init_pos = init_pos + 1) begin
+                slot4_set_tile(init_lvl[1:0], 5'd0, init_pos[4:0], TILE_WALL);
+                slot4_set_tile(init_lvl[1:0], 5'd31, init_pos[4:0], TILE_WALL);
+            end
+        end
+
+        slot4_fill_hspan(2'd0, 5'd4, 5'd6, 5'd17, TILE_WALL);
+        slot4_fill_hspan(2'd0, 5'd4, 5'd19, 5'd25, TILE_WALL);
+        slot4_fill_hspan(2'd0, 5'd7, 5'd2, 5'd6, TILE_WALL);
+        slot4_fill_hspan(2'd0, 5'd7, 5'd25, 5'd29, TILE_WALL);
+        slot4_fill_hspan(2'd0, 5'd9, 5'd8, 5'd11, TILE_FIRE);
+        slot4_fill_hspan(2'd0, 5'd9, 5'd20, 5'd23, TILE_WATER);
+        slot4_fill_hspan(2'd0, 5'd10, 5'd6, 5'd13, TILE_WALL);
+        slot4_fill_hspan(2'd0, 5'd10, 5'd18, 5'd25, TILE_WALL);
+        slot4_fill_hspan(2'd0, 5'd13, 5'd4, 5'd9, TILE_WALL);
+        slot4_fill_hspan(2'd0, 5'd13, 5'd22, 5'd27, TILE_WALL);
+        slot4_fill_hspan(2'd0, 5'd15, 5'd14, 5'd15, TILE_POISON);
+        slot4_fill_hspan(2'd0, 5'd16, 5'd12, 5'd19, TILE_WALL);
+        slot4_fill_hspan(2'd0, 5'd18, 5'd4, 5'd7, TILE_WALL);
+        slot4_fill_hspan(2'd0, 5'd18, 5'd24, 5'd27, TILE_WALL);
+        slot4_set_tile(2'd0, 5'd14, 5'd3, TILE_FIRE_DOOR);
+        slot4_set_tile(2'd0, 5'd16, 5'd3, TILE_WATER_DOOR);
+        slot4_set_tile(2'd0, 5'd9, 5'd3, TILE_FIRE_GEM);
+        slot4_set_tile(2'd0, 5'd11, 5'd12, TILE_FIRE_GEM);
+        slot4_set_tile(2'd0, 5'd22, 5'd3, TILE_WATER_GEM);
+        slot4_set_tile(2'd0, 5'd20, 5'd12, TILE_WATER_GEM);
+
+        slot4_fill_hspan(2'd1, 5'd6, 5'd8, 5'd24, TILE_WALL);
+        slot4_fill_hspan(2'd1, 5'd9, 5'd2, 5'd6, TILE_WALL);
+        slot4_fill_hspan(2'd1, 5'd9, 5'd25, 5'd29, TILE_WALL);
+        slot4_fill_hspan(2'd1, 5'd10, 5'd4, 5'd12, TILE_WALL);
+        slot4_fill_hspan(2'd1, 5'd10, 5'd19, 5'd27, TILE_WALL);
+        slot4_fill_hspan(2'd1, 5'd12, 5'd9, 5'd12, TILE_FIRE);
+        slot4_fill_hspan(2'd1, 5'd12, 5'd19, 5'd22, TILE_WATER);
+        slot4_fill_hspan(2'd1, 5'd13, 5'd14, 5'd17, TILE_POISON);
+        slot4_fill_hspan(2'd1, 5'd14, 5'd10, 5'd21, TILE_WALL);
+        slot4_fill_hspan(2'd1, 5'd16, 5'd5, 5'd10, TILE_WALL);
+        slot4_fill_hspan(2'd1, 5'd16, 5'd21, 5'd26, TILE_WALL);
+        slot4_fill_hspan(2'd1, 5'd17, 5'd4, 5'd7, TILE_FIRE);
+        slot4_fill_hspan(2'd1, 5'd17, 5'd24, 5'd27, TILE_WATER);
+        slot4_fill_hspan(2'd1, 5'd18, 5'd2, 5'd9, TILE_WALL);
+        slot4_fill_hspan(2'd1, 5'd18, 5'd12, 5'd19, TILE_WALL);
+        slot4_fill_hspan(2'd1, 5'd18, 5'd22, 5'd29, TILE_WALL);
+        slot4_fill_hspan(2'd1, 5'd20, 5'd11, 5'd13, TILE_POISON);
+        slot4_fill_hspan(2'd1, 5'd20, 5'd18, 5'd20, TILE_POISON);
+        slot4_fill_vspan(2'd1, 5'd15, 5'd10, 5'd14, TILE_GATE);
+        slot4_set_tile(2'd1, 5'd15, 5'd17, TILE_BUTTON);
+        slot4_set_tile(2'd1, 5'd11, 5'd5, TILE_FIRE_DOOR);
+        slot4_set_tile(2'd1, 5'd22, 5'd5, TILE_WATER_DOOR);
+        slot4_set_tile(2'd1, 5'd6, 5'd17, TILE_FIRE_GEM);
+        slot4_set_tile(2'd1, 5'd12, 5'd9, TILE_FIRE_GEM);
+        slot4_set_tile(2'd1, 5'd25, 5'd17, TILE_WATER_GEM);
+        slot4_set_tile(2'd1, 5'd20, 5'd9, TILE_WATER_GEM);
+
+        slot4_set_tile(2'd2, 5'd15, 5'd5, TILE_POISON);
+        slot4_fill_hspan(2'd2, 5'd6, 5'd4, 5'd13, TILE_WALL);
+        slot4_fill_hspan(2'd2, 5'd6, 5'd19, 5'd28, TILE_WALL);
+        slot4_fill_hspan(2'd2, 5'd9, 5'd2, 5'd5, TILE_WALL);
+        slot4_fill_hspan(2'd2, 5'd9, 5'd26, 5'd29, TILE_WALL);
+        slot4_fill_hspan(2'd2, 5'd10, 5'd2, 5'd6, TILE_WALL);
+        slot4_fill_hspan(2'd2, 5'd10, 5'd10, 5'd15, TILE_WALL);
+        slot4_fill_hspan(2'd2, 5'd10, 5'd17, 5'd22, TILE_WALL);
+        slot4_fill_hspan(2'd2, 5'd10, 5'd26, 5'd29, TILE_WALL);
+        slot4_fill_hspan(2'd2, 5'd12, 5'd7, 5'd10, TILE_WALL);
+        slot4_fill_hspan(2'd2, 5'd12, 5'd21, 5'd24, TILE_WALL);
+        slot4_fill_hspan(2'd2, 5'd13, 5'd10, 5'd13, TILE_FIRE);
+        slot4_fill_hspan(2'd2, 5'd13, 5'd18, 5'd21, TILE_WATER);
+        slot4_fill_hspan(2'd2, 5'd13, 5'd14, 5'd17, TILE_POISON);
+        slot4_fill_hspan(2'd2, 5'd14, 5'd4, 5'd11, TILE_WALL);
+        slot4_fill_hspan(2'd2, 5'd14, 5'd20, 5'd27, TILE_WALL);
+        slot4_fill_hspan(2'd2, 5'd16, 5'd13, 5'd18, TILE_WALL);
+        slot4_fill_hspan(2'd2, 5'd17, 5'd4, 5'd5, TILE_POISON);
+        slot4_fill_hspan(2'd2, 5'd17, 5'd24, 5'd25, TILE_POISON);
+        slot4_fill_hspan(2'd2, 5'd18, 5'd2, 5'd9, TILE_WALL);
+        slot4_fill_hspan(2'd2, 5'd18, 5'd22, 5'd29, TILE_WALL);
+        slot4_fill_hspan(2'd2, 5'd20, 5'd12, 5'd19, TILE_WALL);
+        slot4_fill_vspan(2'd2, 5'd8, 5'd10, 5'd14, TILE_GATE);
+        slot4_fill_vspan(2'd2, 5'd24, 5'd10, 5'd14, TILE_GATE);
+        slot4_set_tile(2'd2, 5'd5, 5'd17, TILE_BUTTON);
+        slot4_set_tile(2'd2, 5'd26, 5'd17, TILE_BUTTON);
+        slot4_set_tile(2'd2, 5'd9, 5'd5, TILE_FIRE_DOOR);
+        slot4_set_tile(2'd2, 5'd22, 5'd5, TILE_WATER_DOOR);
+        slot4_set_tile(2'd2, 5'd5, 5'd5, TILE_FIRE_GEM);
+        slot4_set_tile(2'd2, 5'd21, 5'd13, TILE_FIRE_GEM);
+        slot4_set_tile(2'd2, 5'd26, 5'd5, TILE_WATER_GEM);
+        slot4_set_tile(2'd2, 5'd10, 5'd13, TILE_WATER_GEM);
+    end
+
     wire fire_left_key;
     wire fire_right_key;
     wire fire_jump_key;
@@ -125,6 +276,9 @@ module game_slot4_top (
     reg [4:0] local_x;
     reg [4:0] local_y;
     reg [3:0] draw_tile;
+    reg [3:0] render_r;
+    reg [3:0] render_g;
+    reg [3:0] render_b;
     reg [6:0] seg_n;
 
     reg signed [5:0] fire_vy_calc;
@@ -208,15 +362,6 @@ module game_slot4_top (
                        (pixel_x >= water_x + 10'd2) && (pixel_x <= water_x + 10'd4) &&
                        (pixel_y >= water_y + 10'd5) && (pixel_y <= water_y + 10'd7);
 
-    slot4_ps2_rx u_slot4_ps2_rx (
-        .clk(clk),
-        .reset(reset | ~selected),
-        .ps2_clk(ps2_clk),
-        .ps2_data(ps2_data),
-        .byte_ready(ps2_byte_ready),
-        .byte_data(ps2_byte_data)
-    );
-
     slot4_keyboard_mapper u_slot4_keyboard_mapper (
         .clk(clk),
         .reset(reset | ~selected),
@@ -275,160 +420,96 @@ module game_slot4_top (
         end
     endfunction
 
-    function [3:0] slot4_tile_raw;
-        input [1:0] lvl;
-        input [4:0] tx;
-        input [4:0] ty;
-        begin
-            slot4_tile_raw = TILE_EMPTY;
-
-            if ((tx == 5'd0) || (tx == 5'd31) || (ty == 5'd0) || (ty == 5'd23)) begin
-                slot4_tile_raw = TILE_WALL;
-            end else begin
-                case (lvl)
-                    2'd0: begin
-                        if ((tx == 5'd14) && (ty == 5'd3))
-                            slot4_tile_raw = TILE_FIRE_DOOR;
-                        else if ((tx == 5'd16) && (ty == 5'd3))
-                            slot4_tile_raw = TILE_WATER_DOOR;
-                        else if (((tx == 5'd9) && (ty == 5'd3)) ||
-                                 ((tx == 5'd11) && (ty == 5'd12)))
-                            slot4_tile_raw = TILE_FIRE_GEM;
-                        else if (((tx == 5'd22) && (ty == 5'd3)) ||
-                                 ((tx == 5'd20) && (ty == 5'd12)))
-                            slot4_tile_raw = TILE_WATER_GEM;
-                        else if ((ty == 5'd4) && (((tx >= 5'd6) && (tx <= 5'd17)) ||
-                                                   ((tx >= 5'd19) && (tx <= 5'd25))))
-                            slot4_tile_raw = TILE_WALL;
-                        else if ((ty == 5'd7) && (((tx >= 5'd2) && (tx <= 5'd6)) ||
-                                                   ((tx >= 5'd25) && (tx <= 5'd29))))
-                            slot4_tile_raw = TILE_WALL;
-                        else if ((ty == 5'd9) && (tx >= 5'd8) && (tx <= 5'd11))
-                            slot4_tile_raw = TILE_FIRE;
-                        else if ((ty == 5'd9) && (tx >= 5'd20) && (tx <= 5'd23))
-                            slot4_tile_raw = TILE_WATER;
-                        else if ((ty == 5'd10) && (((tx >= 5'd6) && (tx <= 5'd13)) ||
-                                                    ((tx >= 5'd18) && (tx <= 5'd25))))
-                            slot4_tile_raw = TILE_WALL;
-                        else if ((ty == 5'd13) && (((tx >= 5'd4) && (tx <= 5'd9)) ||
-                                                    ((tx >= 5'd22) && (tx <= 5'd27))))
-                            slot4_tile_raw = TILE_WALL;
-                        else if ((ty == 5'd15) && (tx >= 5'd14) && (tx <= 5'd15))
-                            slot4_tile_raw = TILE_POISON;
-                        else if ((ty == 5'd16) && (tx >= 5'd12) && (tx <= 5'd19))
-                            slot4_tile_raw = TILE_WALL;
-                        else if ((ty == 5'd18) && (((tx >= 5'd4) && (tx <= 5'd7)) ||
-                                                    ((tx >= 5'd24) && (tx <= 5'd27))))
-                            slot4_tile_raw = TILE_WALL;
-                    end
-                    2'd1: begin
-                        if ((tx == 5'd11) && (ty == 5'd5))
-                            slot4_tile_raw = TILE_FIRE_DOOR;
-                        else if ((tx == 5'd22) && (ty == 5'd5))
-                            slot4_tile_raw = TILE_WATER_DOOR;
-                        else if (((tx == 5'd6) && (ty == 5'd17)) ||
-                                 ((tx == 5'd12) && (ty == 5'd9)))
-                            slot4_tile_raw = TILE_FIRE_GEM;
-                        else if (((tx == 5'd25) && (ty == 5'd17)) ||
-                                 ((tx == 5'd20) && (ty == 5'd9)))
-                            slot4_tile_raw = TILE_WATER_GEM;
-                        else if ((tx == 5'd15) && (ty >= 5'd10) && (ty <= 5'd14))
-                            slot4_tile_raw = TILE_GATE;
-                        else if ((tx == 5'd15) && (ty == 5'd17))
-                            slot4_tile_raw = TILE_BUTTON;
-                        else if ((ty == 5'd6) && (tx >= 5'd8) && (tx <= 5'd24))
-                            slot4_tile_raw = TILE_WALL;
-                        else if ((ty == 5'd9) && (((tx >= 5'd2) && (tx <= 5'd6)) ||
-                                                   ((tx >= 5'd25) && (tx <= 5'd29))))
-                            slot4_tile_raw = TILE_WALL;
-                        else if ((ty == 5'd10) && (((tx >= 5'd4) && (tx <= 5'd12)) ||
-                                                    ((tx >= 5'd19) && (tx <= 5'd27))))
-                            slot4_tile_raw = TILE_WALL;
-                        else if ((ty == 5'd12) && (tx >= 5'd9) && (tx <= 5'd12))
-                            slot4_tile_raw = TILE_FIRE;
-                        else if ((ty == 5'd12) && (tx >= 5'd19) && (tx <= 5'd22))
-                            slot4_tile_raw = TILE_WATER;
-                        else if ((ty == 5'd13) && (tx >= 5'd14) && (tx <= 5'd17))
-                            slot4_tile_raw = TILE_POISON;
-                        else if ((ty == 5'd14) && (tx >= 5'd10) && (tx <= 5'd21))
-                            slot4_tile_raw = TILE_WALL;
-                        else if ((ty == 5'd16) && (((tx >= 5'd5) && (tx <= 5'd10)) ||
-                                                    ((tx >= 5'd21) && (tx <= 5'd26))))
-                            slot4_tile_raw = TILE_WALL;
-                        else if ((ty == 5'd17) && (tx >= 5'd4) && (tx <= 5'd7))
-                            slot4_tile_raw = TILE_FIRE;
-                        else if ((ty == 5'd17) && (tx >= 5'd24) && (tx <= 5'd27))
-                            slot4_tile_raw = TILE_WATER;
-                        else if ((ty == 5'd18) && (((tx >= 5'd2) && (tx <= 5'd9)) ||
-                                                    ((tx >= 5'd12) && (tx <= 5'd19)) ||
-                                                    ((tx >= 5'd22) && (tx <= 5'd29))))
-                            slot4_tile_raw = TILE_WALL;
-                        else if ((ty == 5'd20) && (((tx >= 5'd11) && (tx <= 5'd13)) ||
-                                                    ((tx >= 5'd18) && (tx <= 5'd20))))
-                            slot4_tile_raw = TILE_POISON;
-                    end
-                    default: begin
-                        if ((tx == 5'd9) && (ty == 5'd5))
-                            slot4_tile_raw = TILE_FIRE_DOOR;
-                        else if ((tx == 5'd22) && (ty == 5'd5))
-                            slot4_tile_raw = TILE_WATER_DOOR;
-                        else if (((tx == 5'd5) && (ty == 5'd5)) ||
-                                 ((tx == 5'd21) && (ty == 5'd13)))
-                            slot4_tile_raw = TILE_FIRE_GEM;
-                        else if (((tx == 5'd26) && (ty == 5'd5)) ||
-                                 ((tx == 5'd10) && (ty == 5'd13)))
-                            slot4_tile_raw = TILE_WATER_GEM;
-                        else if (((tx == 5'd8) || (tx == 5'd24)) && (ty >= 5'd10) && (ty <= 5'd14))
-                            slot4_tile_raw = TILE_GATE;
-                        else if (((tx == 5'd5) && (ty == 5'd17)) ||
-                                 ((tx == 5'd26) && (ty == 5'd17)))
-                            slot4_tile_raw = TILE_BUTTON;
-                        else if ((ty == 5'd5) && (tx == 5'd15))
-                            slot4_tile_raw = TILE_POISON;
-                        else if ((ty == 5'd6) && (((tx >= 5'd4) && (tx <= 5'd13)) ||
-                                                   ((tx >= 5'd19) && (tx <= 5'd28))))
-                            slot4_tile_raw = TILE_WALL;
-                        else if ((ty == 5'd9) && (((tx >= 5'd2) && (tx <= 5'd5)) ||
-                                                   ((tx >= 5'd26) && (tx <= 5'd29))))
-                            slot4_tile_raw = TILE_WALL;
-                        else if ((ty == 5'd10) && (((tx >= 5'd2) && (tx <= 5'd6)) ||
-                                                    ((tx >= 5'd10) && (tx <= 5'd15)) ||
-                                                    ((tx >= 5'd17) && (tx <= 5'd22)) ||
-                                                    ((tx >= 5'd26) && (tx <= 5'd29))))
-                            slot4_tile_raw = TILE_WALL;
-                        else if ((ty == 5'd12) && (((tx >= 5'd7) && (tx <= 5'd10)) ||
-                                                    ((tx >= 5'd21) && (tx <= 5'd24))))
-                            slot4_tile_raw = TILE_WALL;
-                        else if ((ty == 5'd13) && (tx >= 5'd10) && (tx <= 5'd13))
-                            slot4_tile_raw = TILE_FIRE;
-                        else if ((ty == 5'd13) && (tx >= 5'd18) && (tx <= 5'd21))
-                            slot4_tile_raw = TILE_WATER;
-                        else if ((ty == 5'd13) && (tx >= 5'd14) && (tx <= 5'd17))
-                            slot4_tile_raw = TILE_POISON;
-                        else if ((ty == 5'd14) && (((tx >= 5'd4) && (tx <= 5'd11)) ||
-                                                    ((tx >= 5'd20) && (tx <= 5'd27))))
-                            slot4_tile_raw = TILE_WALL;
-                        else if ((ty == 5'd16) && (tx >= 5'd13) && (tx <= 5'd18))
-                            slot4_tile_raw = TILE_WALL;
-                        else if ((ty == 5'd17) && (((tx >= 5'd4) && (tx <= 5'd5)) ||
-                                                    ((tx >= 5'd24) && (tx <= 5'd25))))
-                            slot4_tile_raw = TILE_POISON;
-                        else if ((ty == 5'd18) && (((tx >= 5'd2) && (tx <= 5'd9)) ||
-                                                    ((tx >= 5'd22) && (tx <= 5'd29))))
-                            slot4_tile_raw = TILE_WALL;
-                        else if ((ty == 5'd20) && (tx >= 5'd12) && (tx <= 5'd19))
-                            slot4_tile_raw = TILE_WALL;
-                    end
-                endcase
-            end
-        end
-    endfunction
-
     function slot4_is_solid_tile;
         input [3:0] tile;
         input open_gate;
         begin
             slot4_is_solid_tile = (tile == TILE_WALL) || ((tile == TILE_GATE) && !open_gate);
+        end
+    endfunction
+
+    function [4:0] slot4_pixel_to_cell_x;
+        input [9:0] px;
+        begin
+            if (px < 10'd20) slot4_pixel_to_cell_x = 5'd0;
+            else if (px < 10'd40) slot4_pixel_to_cell_x = 5'd1;
+            else if (px < 10'd60) slot4_pixel_to_cell_x = 5'd2;
+            else if (px < 10'd80) slot4_pixel_to_cell_x = 5'd3;
+            else if (px < 10'd100) slot4_pixel_to_cell_x = 5'd4;
+            else if (px < 10'd120) slot4_pixel_to_cell_x = 5'd5;
+            else if (px < 10'd140) slot4_pixel_to_cell_x = 5'd6;
+            else if (px < 10'd160) slot4_pixel_to_cell_x = 5'd7;
+            else if (px < 10'd180) slot4_pixel_to_cell_x = 5'd8;
+            else if (px < 10'd200) slot4_pixel_to_cell_x = 5'd9;
+            else if (px < 10'd220) slot4_pixel_to_cell_x = 5'd10;
+            else if (px < 10'd240) slot4_pixel_to_cell_x = 5'd11;
+            else if (px < 10'd260) slot4_pixel_to_cell_x = 5'd12;
+            else if (px < 10'd280) slot4_pixel_to_cell_x = 5'd13;
+            else if (px < 10'd300) slot4_pixel_to_cell_x = 5'd14;
+            else if (px < 10'd320) slot4_pixel_to_cell_x = 5'd15;
+            else if (px < 10'd340) slot4_pixel_to_cell_x = 5'd16;
+            else if (px < 10'd360) slot4_pixel_to_cell_x = 5'd17;
+            else if (px < 10'd380) slot4_pixel_to_cell_x = 5'd18;
+            else if (px < 10'd400) slot4_pixel_to_cell_x = 5'd19;
+            else if (px < 10'd420) slot4_pixel_to_cell_x = 5'd20;
+            else if (px < 10'd440) slot4_pixel_to_cell_x = 5'd21;
+            else if (px < 10'd460) slot4_pixel_to_cell_x = 5'd22;
+            else if (px < 10'd480) slot4_pixel_to_cell_x = 5'd23;
+            else if (px < 10'd500) slot4_pixel_to_cell_x = 5'd24;
+            else if (px < 10'd520) slot4_pixel_to_cell_x = 5'd25;
+            else if (px < 10'd540) slot4_pixel_to_cell_x = 5'd26;
+            else if (px < 10'd560) slot4_pixel_to_cell_x = 5'd27;
+            else if (px < 10'd580) slot4_pixel_to_cell_x = 5'd28;
+            else if (px < 10'd600) slot4_pixel_to_cell_x = 5'd29;
+            else if (px < 10'd620) slot4_pixel_to_cell_x = 5'd30;
+            else slot4_pixel_to_cell_x = 5'd31;
+        end
+    endfunction
+
+    function [4:0] slot4_pixel_to_cell_y;
+        input [9:0] py;
+        begin
+            if (py < 10'd20) slot4_pixel_to_cell_y = 5'd0;
+            else if (py < 10'd40) slot4_pixel_to_cell_y = 5'd1;
+            else if (py < 10'd60) slot4_pixel_to_cell_y = 5'd2;
+            else if (py < 10'd80) slot4_pixel_to_cell_y = 5'd3;
+            else if (py < 10'd100) slot4_pixel_to_cell_y = 5'd4;
+            else if (py < 10'd120) slot4_pixel_to_cell_y = 5'd5;
+            else if (py < 10'd140) slot4_pixel_to_cell_y = 5'd6;
+            else if (py < 10'd160) slot4_pixel_to_cell_y = 5'd7;
+            else if (py < 10'd180) slot4_pixel_to_cell_y = 5'd8;
+            else if (py < 10'd200) slot4_pixel_to_cell_y = 5'd9;
+            else if (py < 10'd220) slot4_pixel_to_cell_y = 5'd10;
+            else if (py < 10'd240) slot4_pixel_to_cell_y = 5'd11;
+            else if (py < 10'd260) slot4_pixel_to_cell_y = 5'd12;
+            else if (py < 10'd280) slot4_pixel_to_cell_y = 5'd13;
+            else if (py < 10'd300) slot4_pixel_to_cell_y = 5'd14;
+            else if (py < 10'd320) slot4_pixel_to_cell_y = 5'd15;
+            else if (py < 10'd340) slot4_pixel_to_cell_y = 5'd16;
+            else if (py < 10'd360) slot4_pixel_to_cell_y = 5'd17;
+            else if (py < 10'd380) slot4_pixel_to_cell_y = 5'd18;
+            else if (py < 10'd400) slot4_pixel_to_cell_y = 5'd19;
+            else if (py < 10'd420) slot4_pixel_to_cell_y = 5'd20;
+            else if (py < 10'd440) slot4_pixel_to_cell_y = 5'd21;
+            else if (py < 10'd460) slot4_pixel_to_cell_y = 5'd22;
+            else slot4_pixel_to_cell_y = 5'd23;
+        end
+    endfunction
+
+    function [4:0] slot4_cell_local;
+        input [9:0] p;
+        input [4:0] cell_idx;
+        reg [9:0] origin;
+        begin
+            origin = ({5'd0, cell_idx} << 4) + ({5'd0, cell_idx} << 2);
+            slot4_cell_local = p - origin;
+        end
+    endfunction
+
+    function [9:0] slot4_cell_origin;
+        input [4:0] cell_idx;
+        begin
+            slot4_cell_origin = ({5'd0, cell_idx} << 4) + ({5'd0, cell_idx} << 2);
         end
     endfunction
 
@@ -442,9 +523,9 @@ module game_slot4_top (
             if ((px >= SCREEN_W) || (py >= SCREEN_H)) begin
                 slot4_tile_at_pixel = TILE_WALL;
             end else begin
-                tx = px / CELL;
-                ty = py / CELL;
-                slot4_tile_at_pixel = slot4_tile_raw(lvl, tx, ty);
+                tx = slot4_pixel_to_cell_x(px);
+                ty = slot4_pixel_to_cell_y(py);
+                slot4_tile_at_pixel = slot4_tile_rom[slot4_tile_addr(lvl, tx, ty)];
             end
         end
     endfunction
@@ -478,12 +559,17 @@ module game_slot4_top (
         input [9:0] px;
         input [9:0] py;
         input open_gate;
+        input move_right;
         begin
-            slot4_player_solid_x =
-                slot4_solid_at(lvl, px, py + COLLIDE_INSET_Y, open_gate) ||
-                slot4_solid_at(lvl, px + PLAYER_W - 1, py + COLLIDE_INSET_Y, open_gate) ||
-                slot4_solid_at(lvl, px, py + PLAYER_H - 1 - COLLIDE_INSET_Y, open_gate) ||
-                slot4_solid_at(lvl, px + PLAYER_W - 1, py + PLAYER_H - 1 - COLLIDE_INSET_Y, open_gate);
+            if (move_right) begin
+                slot4_player_solid_x =
+                    slot4_solid_at(lvl, px + PLAYER_W - 1, py + COLLIDE_INSET_Y, open_gate) ||
+                    slot4_solid_at(lvl, px + PLAYER_W - 1, py + PLAYER_H - 1 - COLLIDE_INSET_Y, open_gate);
+            end else begin
+                slot4_player_solid_x =
+                    slot4_solid_at(lvl, px, py + COLLIDE_INSET_Y, open_gate) ||
+                    slot4_solid_at(lvl, px, py + PLAYER_H - 1 - COLLIDE_INSET_Y, open_gate);
+            end
         end
     endfunction
 
@@ -492,12 +578,17 @@ module game_slot4_top (
         input [9:0] px;
         input [9:0] py;
         input open_gate;
+        input move_down;
         begin
-            slot4_player_solid_y =
-                slot4_solid_at(lvl, px + COLLIDE_INSET_X, py, open_gate) ||
-                slot4_solid_at(lvl, px + PLAYER_W - 1 - COLLIDE_INSET_X, py, open_gate) ||
-                slot4_solid_at(lvl, px + COLLIDE_INSET_X, py + PLAYER_H - 1, open_gate) ||
-                slot4_solid_at(lvl, px + PLAYER_W - 1 - COLLIDE_INSET_X, py + PLAYER_H - 1, open_gate);
+            if (move_down) begin
+                slot4_player_solid_y =
+                    slot4_solid_at(lvl, px + COLLIDE_INSET_X, py + PLAYER_H - 1, open_gate) ||
+                    slot4_solid_at(lvl, px + PLAYER_W - 1 - COLLIDE_INSET_X, py + PLAYER_H - 1, open_gate);
+            end else begin
+                slot4_player_solid_y =
+                    slot4_solid_at(lvl, px + COLLIDE_INSET_X, py, open_gate) ||
+                    slot4_solid_at(lvl, px + PLAYER_W - 1 - COLLIDE_INSET_X, py, open_gate);
+            end
         end
     endfunction
 
@@ -555,8 +646,8 @@ module game_slot4_top (
         reg [9:0] cell_left;
         reg [9:0] cell_top;
         begin
-            cell_left = tx * CELL;
-            cell_top = ty * CELL;
+            cell_left = slot4_cell_origin(tx);
+            cell_top = slot4_cell_origin(ty);
             slot4_player_over_cell =
                 (px + PLAYER_W > cell_left) && (px < cell_left + CELL) &&
                 (py + PLAYER_H > cell_top) && (py < cell_top + CELL);
@@ -892,8 +983,17 @@ module game_slot4_top (
                                           SCREEN_W - PLAYER_W - 1;
                         end
 
-                        if (!slot4_player_solid_x(level, fire_x_calc, fire_y, gate_open_q))
-                            fire_x <= fire_x_calc;
+                        if (fire_x_calc > fire_x) begin
+                            if (!slot4_player_solid_x(level, fire_x_calc, fire_y, gate_open_q, 1'b1))
+                                fire_x <= fire_x_calc;
+                            else
+                                fire_x_calc = fire_x;
+                        end else if (fire_x_calc < fire_x) begin
+                            if (!slot4_player_solid_x(level, fire_x_calc, fire_y, gate_open_q, 1'b0))
+                                fire_x <= fire_x_calc;
+                            else
+                                fire_x_calc = fire_x;
+                        end
 
                         water_x_calc = water_x;
                         if (water_left_cmd && !water_right_cmd) begin
@@ -904,8 +1004,17 @@ module game_slot4_top (
                                            SCREEN_W - PLAYER_W - 1;
                         end
 
-                        if (!slot4_player_solid_x(level, water_x_calc, water_y, gate_open_q))
-                            water_x <= water_x_calc;
+                        if (water_x_calc > water_x) begin
+                            if (!slot4_player_solid_x(level, water_x_calc, water_y, gate_open_q, 1'b1))
+                                water_x <= water_x_calc;
+                            else
+                                water_x_calc = water_x;
+                        end else if (water_x_calc < water_x) begin
+                            if (!slot4_player_solid_x(level, water_x_calc, water_y, gate_open_q, 1'b0))
+                                water_x <= water_x_calc;
+                            else
+                                water_x_calc = water_x;
+                        end
 
                         fire_vy_calc = fire_vy;
                         if (fire_jump_cmd && fire_grounded_q) begin
@@ -921,7 +1030,8 @@ module game_slot4_top (
                         end else if (fire_y_calc > SCREEN_H - PLAYER_H - 1) begin
                             fire_y <= SCREEN_H - PLAYER_H - 1;
                             fire_vy <= 6'sd0;
-                        end else if (!slot4_player_solid_y(level, fire_x, fire_y_calc[9:0], gate_open_q)) begin
+                        end else if (!slot4_player_solid_y(level, fire_x_calc, fire_y_calc[9:0], gate_open_q,
+                                                           (fire_vy_calc > 6'sd0))) begin
                             fire_y <= fire_y_calc[9:0];
                             fire_vy <= fire_vy_calc;
                         end else begin
@@ -944,7 +1054,8 @@ module game_slot4_top (
                         end else if (water_y_calc > SCREEN_H - PLAYER_H - 1) begin
                             water_y <= SCREEN_H - PLAYER_H - 1;
                             water_vy <= 6'sd0;
-                        end else if (!slot4_player_solid_y(level, water_x, water_y_calc[9:0], gate_open_q)) begin
+                        end else if (!slot4_player_solid_y(level, water_x_calc, water_y_calc[9:0], gate_open_q,
+                                                           (water_vy_calc > 6'sd0))) begin
                             water_y <= water_y_calc[9:0];
                             water_vy <= water_vy_calc;
                         end else begin
@@ -957,11 +1068,11 @@ module game_slot4_top (
     end
 
     always @(*) begin
-        cell_x = pixel_x / CELL;
-        cell_y = pixel_y / CELL;
-        local_x = pixel_x - (cell_x * CELL);
-        local_y = pixel_y - (cell_y * CELL);
-        draw_tile = slot4_tile_raw(level, cell_x, cell_y);
+        cell_x = slot4_pixel_to_cell_x(pixel_x);
+        cell_y = slot4_pixel_to_cell_y(pixel_y);
+        local_x = slot4_cell_local(pixel_x, cell_x);
+        local_y = slot4_cell_local(pixel_y, cell_y);
+        draw_tile = slot4_tile_rom[slot4_tile_addr(level, cell_x, cell_y)];
 
         if ((draw_tile == TILE_FIRE_GEM) && slot4_fire_gem_collected(level, cell_x, cell_y, fire_gems))
             draw_tile = TILE_EMPTY;
@@ -971,139 +1082,151 @@ module game_slot4_top (
             draw_tile = TILE_EMPTY;
 
         if (!display_active || !selected) begin
-            vga_r = 4'h0;
-            vga_g = 4'h0;
-            vga_b = 4'h0;
+            render_r = 4'h0;
+            render_g = 4'h0;
+            render_b = 4'h0;
         end else if (won) begin
-            vga_r = pixel_x[5] ^ pixel_y[4] ? 4'hF : 4'h2;
-            vga_g = pixel_x[6] ^ frame_counter[4] ? 4'hD : 4'h4;
-            vga_b = pixel_y[5] ^ frame_counter[3] ? 4'h7 : 4'hF;
+            render_r = pixel_x[5] ^ pixel_y[4] ? 4'hF : 4'h2;
+            render_g = pixel_x[6] ^ frame_counter[4] ? 4'hD : 4'h4;
+            render_b = pixel_y[5] ^ frame_counter[3] ? 4'h7 : 4'hF;
         end else if (fire_eye || water_eye) begin
-            vga_r = 4'h1;
-            vga_g = 4'h1;
-            vga_b = 4'h1;
+            render_r = 4'h1;
+            render_g = 4'h1;
+            render_b = 4'h1;
         end else if (fire_pixel) begin
             if (pixel_y < fire_y + 10'd4) begin
-                vga_r = 4'hF;
-                vga_g = 4'hC;
-                vga_b = 4'h2;
+                render_r = 4'hF;
+                render_g = 4'hC;
+                render_b = 4'h2;
             end else begin
-                vga_r = 4'hE;
-                vga_g = 4'h3 + frame_counter[3];
-                vga_b = 4'h1;
+                render_r = 4'hE;
+                render_g = 4'h3 + frame_counter[3];
+                render_b = 4'h1;
             end
         end else if (water_pixel) begin
             if (pixel_y < water_y + 10'd4) begin
-                vga_r = 4'h9;
-                vga_g = 4'hF;
-                vga_b = 4'hF;
+                render_r = 4'h9;
+                render_g = 4'hF;
+                render_b = 4'hF;
             end else begin
-                vga_r = 4'h1;
-                vga_g = 4'h8;
-                vga_b = 4'hF;
+                render_r = 4'h1;
+                render_g = 4'h8;
+                render_b = 4'hF;
             end
         end else begin
-            vga_r = 4'h0;
-            vga_g = 4'h1 + {2'b00, pixel_y[6:5]};
-            vga_b = 4'h3 + {2'b00, pixel_x[6:5]};
+            render_r = 4'h0;
+            render_g = 4'h1 + {2'b00, pixel_y[6:5]};
+            render_b = 4'h3 + {2'b00, pixel_x[6:5]};
 
             case (draw_tile)
                 TILE_WALL: begin
                     if ((local_x == 5'd0) || (local_y == 5'd0) ||
                         (local_x == 5'd19) || (local_y == 5'd19)) begin
-                        vga_r = 4'h9;
-                        vga_g = 4'h9;
-                        vga_b = 4'h9;
+                        render_r = 4'h9;
+                        render_g = 4'h9;
+                        render_b = 4'h9;
                     end else if (local_y < 5'd4) begin
-                        vga_r = 4'h6;
-                        vga_g = 4'h6;
-                        vga_b = 4'h7;
+                        render_r = 4'h6;
+                        render_g = 4'h6;
+                        render_b = 4'h7;
                     end else begin
-                        vga_r = 4'h3;
-                        vga_g = 4'h3;
-                        vga_b = 4'h4;
+                        render_r = 4'h3;
+                        render_g = 4'h3;
+                        render_b = 4'h4;
                     end
                 end
                 TILE_FIRE: begin
-                    vga_r = 4'hF;
-                    vga_g = (local_y[2] ^ frame_counter[3]) ? 4'h6 : 4'h2;
-                    vga_b = 4'h0;
+                    render_r = 4'hF;
+                    render_g = (local_y[2] ^ frame_counter[3]) ? 4'h6 : 4'h2;
+                    render_b = 4'h0;
                 end
                 TILE_WATER: begin
-                    vga_r = 4'h0;
-                    vga_g = (local_x[2] ^ frame_counter[3]) ? 4'h9 : 4'hC;
-                    vga_b = 4'hF;
+                    render_r = 4'h0;
+                    render_g = (local_x[2] ^ frame_counter[3]) ? 4'h9 : 4'hC;
+                    render_b = 4'hF;
                 end
                 TILE_POISON: begin
-                    vga_r = 4'h3;
-                    vga_g = (local_x[2] ^ local_y[2] ^ frame_counter[3]) ? 4'hF : 4'h9;
-                    vga_b = 4'h2;
+                    render_r = 4'h3;
+                    render_g = (local_x[2] ^ local_y[2] ^ frame_counter[3]) ? 4'hF : 4'h9;
+                    render_b = 4'h2;
                 end
                 TILE_FIRE_GEM: begin
                     if ((local_x >= 5'd5) && (local_x <= 5'd14) &&
                         (local_y >= 5'd4) && (local_y <= 5'd15)) begin
-                        vga_r = 4'hF;
-                        vga_g = 4'h6 + frame_counter[3];
-                        vga_b = 4'h2;
+                        render_r = 4'hF;
+                        render_g = 4'h6 + frame_counter[3];
+                        render_b = 4'h2;
                     end
                 end
                 TILE_WATER_GEM: begin
                     if ((local_x >= 5'd5) && (local_x <= 5'd14) &&
                         (local_y >= 5'd4) && (local_y <= 5'd15)) begin
-                        vga_r = 4'h4;
-                        vga_g = 4'hC;
-                        vga_b = 4'hF;
+                        render_r = 4'h4;
+                        render_g = 4'hC;
+                        render_b = 4'hF;
                     end
                 end
                 TILE_FIRE_DOOR: begin
                     if ((local_x < 5'd3) || (local_x > 5'd16) || (local_y < 5'd3)) begin
-                        vga_r = 4'hF;
-                        vga_g = 4'h4;
-                        vga_b = 4'h1;
+                        render_r = 4'hF;
+                        render_g = 4'h4;
+                        render_b = 4'h1;
                     end else begin
-                        vga_r = 4'h5;
-                        vga_g = 4'h1;
-                        vga_b = 4'h0;
+                        render_r = 4'h5;
+                        render_g = 4'h1;
+                        render_b = 4'h0;
                     end
                 end
                 TILE_WATER_DOOR: begin
                     if ((local_x < 5'd3) || (local_x > 5'd16) || (local_y < 5'd3)) begin
-                        vga_r = 4'h2;
-                        vga_g = 4'hC;
-                        vga_b = 4'hF;
+                        render_r = 4'h2;
+                        render_g = 4'hC;
+                        render_b = 4'hF;
                     end else begin
-                        vga_r = 4'h0;
-                        vga_g = 4'h2;
-                        vga_b = 4'h6;
+                        render_r = 4'h0;
+                        render_g = 4'h2;
+                        render_b = 4'h6;
                     end
                 end
                 TILE_BUTTON: begin
                     if ((local_y >= 5'd12) && (local_y <= 5'd16) &&
                         (local_x >= 5'd4) && (local_x <= 5'd15)) begin
-                        vga_r = gate_open ? 4'h5 : 4'hF;
-                        vga_g = gate_open ? 4'hF : 4'hD;
-                        vga_b = 4'h2;
+                        render_r = gate_open ? 4'h5 : 4'hF;
+                        render_g = gate_open ? 4'hF : 4'hD;
+                        render_b = 4'h2;
                     end
                 end
                 TILE_GATE: begin
                     if ((local_x < 5'd5) || (local_x > 5'd14)) begin
-                        vga_r = 4'hB;
-                        vga_g = 4'hC;
-                        vga_b = 4'hD;
+                        render_r = 4'hB;
+                        render_g = 4'hC;
+                        render_b = 4'hD;
                     end else begin
-                        vga_r = 4'h4;
-                        vga_g = 4'h5;
-                        vga_b = 4'h7;
+                        render_r = 4'h4;
+                        render_g = 4'h5;
+                        render_b = 4'h7;
                     end
                 end
                 default: begin
                     if ((local_x == 5'd0) || (local_y == 5'd0)) begin
-                        vga_r = 4'h0;
-                        vga_g = 4'h0;
-                        vga_b = 4'h2;
+                        render_r = 4'h0;
+                        render_g = 4'h0;
+                        render_b = 4'h2;
                     end
                 end
             endcase
+        end
+    end
+
+    always @(posedge clk) begin
+        if (reset) begin
+            vga_r <= 4'h0;
+            vga_g <= 4'h0;
+            vga_b <= 4'h0;
+        end else if (pixel_tick) begin
+            vga_r <= render_r;
+            vga_g <= render_g;
+            vga_b <= render_b;
         end
     end
 
@@ -1133,73 +1256,6 @@ module game_slot4_top (
     assign {ca, cb, cc, cd, ce, cf, cg} = seg_n;
     assign dp = 1'b1;
     assign buzzer = 1'b1;
-
-endmodule
-
-module slot4_ps2_rx (
-    input  wire       clk,
-    input  wire       reset,
-    input  wire       ps2_clk,
-    input  wire       ps2_data,
-    output reg        byte_ready,
-    output reg  [7:0] byte_data
-);
-
-    reg ps2_clk_ff0;
-    reg ps2_clk_ff1;
-    reg ps2_data_ff0;
-    reg ps2_data_ff1;
-    reg [3:0] bit_count;
-    reg [7:0] shift_data;
-
-    wire ps2_clk_fall;
-
-    assign ps2_clk_fall = ps2_clk_ff1 & ~ps2_clk_ff0;
-
-    always @(posedge clk) begin
-        if (reset) begin
-            ps2_clk_ff0 <= 1'b1;
-            ps2_clk_ff1 <= 1'b1;
-            ps2_data_ff0 <= 1'b1;
-            ps2_data_ff1 <= 1'b1;
-            bit_count <= 4'd0;
-            shift_data <= 8'd0;
-            byte_ready <= 1'b0;
-            byte_data <= 8'd0;
-        end else begin
-            ps2_clk_ff0 <= ps2_clk;
-            ps2_clk_ff1 <= ps2_clk_ff0;
-            ps2_data_ff0 <= ps2_data;
-            ps2_data_ff1 <= ps2_data_ff0;
-            byte_ready <= 1'b0;
-
-            if (ps2_clk_fall) begin
-                case (bit_count)
-                    4'd0: begin
-                        if (ps2_data_ff1 == 1'b0)
-                            bit_count <= 4'd1;
-                    end
-                    4'd1: begin shift_data[0] <= ps2_data_ff1; bit_count <= 4'd2; end
-                    4'd2: begin shift_data[1] <= ps2_data_ff1; bit_count <= 4'd3; end
-                    4'd3: begin shift_data[2] <= ps2_data_ff1; bit_count <= 4'd4; end
-                    4'd4: begin shift_data[3] <= ps2_data_ff1; bit_count <= 4'd5; end
-                    4'd5: begin shift_data[4] <= ps2_data_ff1; bit_count <= 4'd6; end
-                    4'd6: begin shift_data[5] <= ps2_data_ff1; bit_count <= 4'd7; end
-                    4'd7: begin shift_data[6] <= ps2_data_ff1; bit_count <= 4'd8; end
-                    4'd8: begin shift_data[7] <= ps2_data_ff1; bit_count <= 4'd9; end
-                    4'd9: begin bit_count <= 4'd10; end
-                    4'd10: begin
-                        if (ps2_data_ff1 == 1'b1) begin
-                            byte_data <= shift_data;
-                            byte_ready <= 1'b1;
-                        end
-                        bit_count <= 4'd0;
-                    end
-                    default: bit_count <= 4'd0;
-                endcase
-            end
-        end
-    end
 
 endmodule
 

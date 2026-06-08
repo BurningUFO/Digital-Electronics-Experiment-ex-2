@@ -1,7 +1,7 @@
 module slot3_text (
     input  wire [9:0]  pixel_x,
     input  wire [9:0]  pixel_y,
-    input  wire [3:0]  msg_id,
+    input  wire [4:0]  msg_id,
     input  wire [9:0]  origin_x,
     input  wire [9:0]  origin_y,
     input  wire [1:0]  scale,
@@ -16,15 +16,34 @@ module slot3_text (
     wire [4:0] row = (scale == 2'd2) ? ly[9:3] :
                      (scale == 2'd1) ? ly[9:2] : ly[9:1];
 
+    (* rom_style = "distributed" *) reg [6:0] div6_rom [0:127];
+    integer div_i;
+    reg [3:0] div_q;
+    reg [2:0] div_r;
+    initial begin
+        div_q = 4'd0;
+        div_r = 3'd0;
+        for (div_i = 0; div_i < 128; div_i = div_i + 1) begin
+            div6_rom[div_i] = {div_q, div_r};
+            if (div_r == 3'd5) begin
+                div_r = 3'd0;
+                div_q = div_q + 4'd1;
+            end else begin
+                div_r = div_r + 3'd1;
+            end
+        end
+    end
+
     wire [4:0] char_idx;
-    wire [2:0] cx = col % 7'd6;
-    wire [6:0] char_pos = col / 7'd6;
+    wire [6:0] div6_lookup = div6_rom[col];
+    wire [2:0] cx = div6_lookup[2:0];
+    wire [3:0] char_pos = div6_lookup[6:3];
 
     wire in_bounds = (pixel_x >= origin_x) && (pixel_y >= origin_y) && (row < 5'd7);
 
     slot3_msg_lut u_msg_lut (
         .msg_id(msg_id),
-        .char_pos(char_pos[3:0]),
+        .char_pos(char_pos),
         .char_idx(char_idx)
     );
 
@@ -41,7 +60,7 @@ endmodule
 
 
 module slot3_msg_lut (
-    input  wire [3:0] msg_id,
+    input  wire [4:0] msg_id,
     input  wire [3:0] char_pos,
     output reg  [4:0] char_idx
 );
@@ -53,7 +72,7 @@ module slot3_msg_lut (
     always @(*) begin
         char_idx = 5'd31;
         case (msg_id)
-            4'd0: // "MATRIX"
+            5'd0: // "MATRIX"
                 case (char_pos)
                     4'd0: char_idx = 5'd12; // M
                     4'd1: char_idx = 5'd0;  // A
@@ -63,7 +82,7 @@ module slot3_msg_lut (
                     4'd5: char_idx = 5'd23; // X
                     default: char_idx = 5'd31;
                 endcase
-            4'd1: // "START"
+            5'd1: // "START"
                 case (char_pos)
                     4'd0: char_idx = 5'd18; // S
                     4'd1: char_idx = 5'd19; // T
@@ -72,7 +91,7 @@ module slot3_msg_lut (
                     4'd4: char_idx = 5'd19; // T
                     default: char_idx = 5'd31;
                 endcase
-            4'd2: // "LEVEL"
+            5'd2: // "LEVEL"
                 case (char_pos)
                     4'd0: char_idx = 5'd11; // L
                     4'd1: char_idx = 5'd4;  // E
@@ -81,7 +100,7 @@ module slot3_msg_lut (
                     4'd4: char_idx = 5'd11; // L
                     default: char_idx = 5'd31;
                 endcase
-            4'd3: // "EXIT"
+            5'd3: // "EXIT"
                 case (char_pos)
                     4'd0: char_idx = 5'd4;  // E
                     4'd1: char_idx = 5'd23; // X
@@ -89,14 +108,14 @@ module slot3_msg_lut (
                     4'd3: char_idx = 5'd19; // T
                     default: char_idx = 5'd31;
                 endcase
-            4'd4: // "WIN"
+            5'd4: // "WIN"
                 case (char_pos)
                     4'd0: char_idx = 5'd22; // W
                     4'd1: char_idx = 5'd8;  // I
                     4'd2: char_idx = 5'd13; // N
                     default: char_idx = 5'd31;
                 endcase
-            4'd5: // "LOSE"
+            5'd5: // "LOSE"
                 case (char_pos)
                     4'd0: char_idx = 5'd11; // L
                     4'd1: char_idx = 5'd14; // O
@@ -104,7 +123,7 @@ module slot3_msg_lut (
                     4'd3: char_idx = 5'd4;  // E
                     default: char_idx = 5'd31;
                 endcase
-            4'd6: // "FIND"
+            5'd6: // "FIND"
                 case (char_pos)
                     4'd0: char_idx = 5'd5;  // F
                     4'd1: char_idx = 5'd8;  // I
@@ -112,7 +131,7 @@ module slot3_msg_lut (
                     4'd3: char_idx = 5'd3;  // D
                     default: char_idx = 5'd31;
                 endcase
-            4'd7: // "HACK"
+            5'd7: // "HACK"
                 case (char_pos)
                     4'd0: char_idx = 5'd7;  // H
                     4'd1: char_idx = 5'd0;  // A
@@ -120,7 +139,7 @@ module slot3_msg_lut (
                     4'd3: char_idx = 5'd10; // K
                     default: char_idx = 5'd31;
                 endcase
-            4'd8: // "RESCUE"
+            5'd8: // "RESCUE"
                 case (char_pos)
                     4'd0: char_idx = 5'd17; // R
                     4'd1: char_idx = 5'd4;  // E
@@ -130,7 +149,7 @@ module slot3_msg_lut (
                     4'd5: char_idx = 5'd4;  // E
                     default: char_idx = 5'd31;
                 endcase
-            4'd9: // "PHONE"
+            5'd9: // "PHONE"
                 case (char_pos)
                     4'd0: char_idx = 5'd15; // P
                     4'd1: char_idx = 5'd7;  // H
@@ -139,14 +158,14 @@ module slot3_msg_lut (
                     4'd4: char_idx = 5'd4;  // E
                     default: char_idx = 5'd31;
                 endcase
-            4'd10: // "RED"
+            5'd10: // "RED"
                 case (char_pos)
                     4'd0: char_idx = 5'd17; // R
                     4'd1: char_idx = 5'd4;  // E
                     4'd2: char_idx = 5'd3;  // D
                     default: char_idx = 5'd31;
                 endcase
-            4'd11: // "BLUE"
+            5'd11: // "BLUE"
                 case (char_pos)
                     4'd0: char_idx = 5'd1;  // B
                     4'd1: char_idx = 5'd11; // L
@@ -154,7 +173,7 @@ module slot3_msg_lut (
                     4'd3: char_idx = 5'd4;  // E
                     default: char_idx = 5'd31;
                 endcase
-            4'd12: // "OVER"
+            5'd12: // "OVER"
                 case (char_pos)
                     4'd0: char_idx = 5'd14; // O
                     4'd1: char_idx = 5'd21; // V
@@ -162,7 +181,7 @@ module slot3_msg_lut (
                     4'd3: char_idx = 5'd17; // R
                     default: char_idx = 5'd31;
                 endcase
-            4'd13: // "GAME"
+            5'd13: // "GAME"
                 case (char_pos)
                     4'd0: char_idx = 5'd6;  // G
                     4'd1: char_idx = 5'd0;  // A
@@ -170,7 +189,7 @@ module slot3_msg_lut (
                     4'd3: char_idx = 5'd4;  // E
                     default: char_idx = 5'd31;
                 endcase
-            4'd14: // "PILL"
+            5'd14: // "PILL"
                 case (char_pos)
                     4'd0: char_idx = 5'd15; // P
                     4'd1: char_idx = 5'd8;  // I
@@ -178,7 +197,7 @@ module slot3_msg_lut (
                     4'd3: char_idx = 5'd11; // L
                     default: char_idx = 5'd31;
                 endcase
-            4'd15: // "AMMO"
+            5'd15: // "AMMO"
                 case (char_pos)
                     4'd0: char_idx = 5'd0;  // A
                     4'd1: char_idx = 5'd12; // M
@@ -186,7 +205,7 @@ module slot3_msg_lut (
                     4'd3: char_idx = 5'd14; // O
                     default: char_idx = 5'd31;
                 endcase
-            4'd16: // "CHARGE"
+            5'd16: // "CHARGE"
                 case (char_pos)
                     4'd0: char_idx = 5'd2;  // C
                     4'd1: char_idx = 5'd7;  // H
@@ -196,14 +215,14 @@ module slot3_msg_lut (
                     4'd5: char_idx = 5'd4;  // E
                     default: char_idx = 5'd31;
                 endcase
-            4'd17: // "EMP"
+            5'd17: // "EMP"
                 case (char_pos)
                     4'd0: char_idx = 5'd4;  // E
                     4'd1: char_idx = 5'd12; // M
                     4'd2: char_idx = 5'd15; // P
                     default: char_idx = 5'd31;
                 endcase
-            4'd18: // "RESCUE"
+            5'd18: // "RESCUE"
                 case (char_pos)
                     4'd0: char_idx = 5'd17; // R
                     4'd1: char_idx = 5'd4;  // E
@@ -213,7 +232,7 @@ module slot3_msg_lut (
                     4'd5: char_idx = 5'd4;  // E
                     default: char_idx = 5'd31;
                 endcase
-            4'd19: // "GOAL"
+            5'd19: // "GOAL"
                 case (char_pos)
                     4'd0: char_idx = 5'd6;  // G
                     4'd1: char_idx = 5'd14; // O
@@ -221,7 +240,7 @@ module slot3_msg_lut (
                     4'd3: char_idx = 5'd11; // L
                     default: char_idx = 5'd31;
                 endcase
-            4'd20: // "BOMB"
+            5'd20: // "BOMB"
                 case (char_pos)
                     4'd0: char_idx = 5'd1;  // B
                     4'd1: char_idx = 5'd14; // O

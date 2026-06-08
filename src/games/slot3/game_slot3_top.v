@@ -15,6 +15,8 @@ module game_slot3_top (
     input  wire [15:0] sw,
     input  wire        ps2_clk,
     input  wire        ps2_data,
+    input  wire        ps2_byte_ready,
+    input  wire [7:0]  ps2_byte_data,
     output reg  [3:0]  vga_r,
     output reg  [3:0]  vga_g,
     output reg  [3:0]  vga_b,
@@ -33,6 +35,7 @@ module game_slot3_top (
 
     localparam [2:0] ST_START = 3'd0;
     localparam [2:0] ST_PLAY  = 3'd1;
+    localparam [2:0] ST_LOAD  = 3'd2;
     localparam [2:0] ST_WIN   = 3'd3;
     localparam [2:0] ST_LOSE  = 3'd4;
 
@@ -96,7 +99,8 @@ module game_slot3_top (
     wire confirm_pulse, shoot_pulse, bomb_pulse, emp_pulse, cloak_pulse, esc_pulse, space_pulse;
     slot3_input u_input (
         .clk(clk), .reset(slot_reset_input), .selected(selected),
-        .ps2_clk(ps2_clk), .ps2_data(ps2_data),
+        .ps2_byte_ready(ps2_byte_ready),
+        .ps2_byte_data(ps2_byte_data),
         .btn_u(btn_u), .btn_d(btn_d), .btn_l(btn_l), .btn_r(btn_r), .btn_c(btn_c),
         .input_up(input_up), .input_down(input_down),
         .input_left(input_left), .input_right(input_right),
@@ -358,41 +362,47 @@ module game_slot3_top (
         .emp_visual(emp_visual), .start_level(start_level_pulse)
     );
 
-    reg  [3:0] text_msg_id;
+    reg  [4:0] text_msg_id;
     reg  [9:0] text_origin_x;
     reg  [9:0] text_origin_y;
     reg  [1:0] text_scale;
     wire text_hit;
     always @(*) begin
-        text_msg_id = 4'd0;
+        text_msg_id = 5'd0;
         text_origin_x = 10'd200;
         text_origin_y = 10'd80;
         text_scale = 2'd1;
         case (state)
             ST_START: begin
-                text_msg_id = 4'd0;
+                text_msg_id = 5'd0;
+                text_origin_x = 10'd200;
+                text_origin_y = 10'd80;
+                text_scale = 2'd2;
+            end
+            ST_LOAD: begin
+                text_msg_id = 5'd0;
                 text_origin_x = 10'd200;
                 text_origin_y = 10'd80;
                 text_scale = 2'd2;
             end
             ST_WIN: begin
-                text_msg_id = 4'd4;
+                text_msg_id = 5'd4;
                 text_origin_x = 10'd250;
                 text_origin_y = 10'd200;
                 text_scale = 2'd2;
             end
             ST_LOSE: begin
-                text_msg_id = 4'd5;
+                text_msg_id = 5'd5;
                 text_origin_x = 10'd240;
                 text_origin_y = 10'd200;
                 text_scale = 2'd2;
             end
             default: begin
                 case (quest_phase)
-                    2'd0: begin text_msg_id = 4'd6; text_origin_x = 10'd20; text_origin_y = 10'd460; text_scale = 2'd0; end
-                    2'd1: begin text_msg_id = 4'd7; text_origin_x = 10'd20; text_origin_y = 10'd460; text_scale = 2'd0; end
-                    2'd2: begin text_msg_id = 4'd8; text_origin_x = 10'd20; text_origin_y = 10'd460; text_scale = 2'd0; end
-                    default: begin text_msg_id = 4'd9; text_origin_x = 10'd20; text_origin_y = 10'd460; text_scale = 2'd0; end
+                    2'd0: begin text_msg_id = 5'd6; text_origin_x = 10'd20; text_origin_y = 10'd460; text_scale = 2'd0; end
+                    2'd1: begin text_msg_id = 5'd7; text_origin_x = 10'd20; text_origin_y = 10'd460; text_scale = 2'd0; end
+                    2'd2: begin text_msg_id = 5'd8; text_origin_x = 10'd20; text_origin_y = 10'd460; text_scale = 2'd0; end
+                    default: begin text_msg_id = 5'd9; text_origin_x = 10'd20; text_origin_y = 10'd460; text_scale = 2'd0; end
                 endcase
             end
         endcase
@@ -408,7 +418,8 @@ module game_slot3_top (
     (* keep = "true" *) reg [1:0]  neo_dir_video_q;
     (* keep = "true" *) reg [7:0]  attract_timer_video_q;
     (* keep = "true" *) reg [8:0]  bt_timer_video_q;
-    (* keep = "true" *) reg [5:0]  ammo_video_q;
+    (* keep = "true" *) reg [3:0]  ammo_tens_video_q;
+    (* keep = "true" *) reg [3:0]  ammo_ones_video_q;
     (* keep = "true" *) reg [2:0]  charges_video_q;
     (* keep = "true" *) reg [1:0]  emp_count_video_q;
     (* keep = "true" *) reg [1:0]  quest_phase_video_q;
@@ -449,10 +460,36 @@ module game_slot3_top (
     (* keep = "true" *) reg [1:0]  menu_choice_video_q;
     (* keep = "true" *) reg [3:0]  start_difficulty_video_q;
     (* keep = "true" *) reg [3:0]  level_video_q;
-    (* keep = "true" *) reg [3:0]  text_msg_id_video_q;
+    (* keep = "true" *) reg [4:0]  text_msg_id_video_q;
     (* keep = "true" *) reg [9:0]  text_origin_x_video_q;
     (* keep = "true" *) reg [9:0]  text_origin_y_video_q;
     (* keep = "true" *) reg [1:0]  text_scale_video_q;
+
+    function [3:0] slot3_dec_tens6;
+        input [5:0] value;
+        begin
+            if (value >= 6'd60) slot3_dec_tens6 = 4'd6;
+            else if (value >= 6'd50) slot3_dec_tens6 = 4'd5;
+            else if (value >= 6'd40) slot3_dec_tens6 = 4'd4;
+            else if (value >= 6'd30) slot3_dec_tens6 = 4'd3;
+            else if (value >= 6'd20) slot3_dec_tens6 = 4'd2;
+            else if (value >= 6'd10) slot3_dec_tens6 = 4'd1;
+            else slot3_dec_tens6 = 4'd0;
+        end
+    endfunction
+
+    function [3:0] slot3_dec_ones6;
+        input [5:0] value;
+        begin
+            if (value >= 6'd60) slot3_dec_ones6 = value - 6'd60;
+            else if (value >= 6'd50) slot3_dec_ones6 = value - 6'd50;
+            else if (value >= 6'd40) slot3_dec_ones6 = value - 6'd40;
+            else if (value >= 6'd30) slot3_dec_ones6 = value - 6'd30;
+            else if (value >= 6'd20) slot3_dec_ones6 = value - 6'd20;
+            else if (value >= 6'd10) slot3_dec_ones6 = value - 6'd10;
+            else slot3_dec_ones6 = value[3:0];
+        end
+    endfunction
 
     slot3_text u_text (
         .pixel_x(pixel_x), .pixel_y(pixel_y),
@@ -474,7 +511,8 @@ module game_slot3_top (
             neo_dir_video_q <= 2'd0;
             attract_timer_video_q <= 8'd0;
             bt_timer_video_q <= 9'd0;
-            ammo_video_q <= 6'd0;
+            ammo_tens_video_q <= 4'd0;
+            ammo_ones_video_q <= 4'd0;
             charges_video_q <= 3'd0;
             emp_count_video_q <= 2'd0;
             quest_phase_video_q <= 2'd0;
@@ -514,7 +552,7 @@ module game_slot3_top (
             menu_choice_video_q <= 2'd0;
             start_difficulty_video_q <= 4'd1;
             level_video_q <= 4'd1;
-            text_msg_id_video_q <= 4'd0;
+            text_msg_id_video_q <= 5'd0;
             text_origin_x_video_q <= 10'd0;
             text_origin_y_video_q <= 10'd0;
             text_scale_video_q <= 2'd0;
@@ -528,7 +566,8 @@ module game_slot3_top (
             neo_dir_video_q <= neo_dir;
             attract_timer_video_q <= attract_timer;
             bt_timer_video_q <= bt_timer;
-            ammo_video_q <= ammo;
+            ammo_tens_video_q <= slot3_dec_tens6(ammo);
+            ammo_ones_video_q <= slot3_dec_ones6(ammo);
             charges_video_q <= charges_w;
             emp_count_video_q <= emp_count;
             quest_phase_video_q <= quest_phase;
@@ -595,7 +634,8 @@ module game_slot3_top (
         .move_phase(move_phase_video_q), .frame_count(frame_count_video_q),
         .neo_x(neo_x_video_q), .neo_y(neo_y_video_q), .neo_dir(neo_dir_video_q),
         .attract_timer(attract_timer_video_q), .bt_timer(bt_timer_video_q), .cloak_timer(9'd0),
-        .ammo(ammo_video_q), .charges(charges_video_q), .emp_count(emp_count_video_q),
+        .ammo_tens(ammo_tens_video_q), .ammo_ones(ammo_ones_video_q),
+        .charges(charges_video_q), .emp_count(emp_count_video_q),
         .quest_phase(quest_phase_video_q), .rescued(rescued_video_q), .rescue_goal(rescue_goal_video_q),
         .trinity_found(trinity_found_video_q), .terminal_hacked(terminal_hacked_video_q),
         .smith_x0(smith_x0_video_q), .smith_x1(smith_x1_video_q), .smith_x2(smith_x2_video_q), .smith_x3(smith_x3_video_q),
@@ -696,11 +736,15 @@ module game_slot3_top (
                         if (menu_choice == 2'd0) begin
                             level <= start_difficulty;
                             start_level_req <= 1'b1;
-                            state <= ST_PLAY;
+                            state <= ST_LOAD;
                         end else if (menu_choice == 2'd1) begin
                             start_difficulty <= (start_difficulty == 4'd5) ? 4'd1 : start_difficulty + 4'd1;
                         end
                     end
+                end
+                ST_LOAD: begin
+                    if (esc_pulse) state <= ST_START;
+                    else if (map_gen_done) state <= ST_PLAY;
                 end
                 ST_PLAY: begin
                     if (esc_pulse) state <= ST_START;

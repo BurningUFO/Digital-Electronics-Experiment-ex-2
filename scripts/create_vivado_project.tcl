@@ -4,6 +4,22 @@ set build_dir [file join $root_dir "build" "vivado"]
 
 create_project game_console $build_dir -part xc7a100tcsg324-1 -force
 
+set build_define ""
+if {[info exists ::env(GAME_CONSOLE_BUILD)]} {
+    switch -- [string tolower $::env(GAME_CONSOLE_BUILD)] {
+        tank  { set build_define "BUILD_TANK_ONLY" }
+        slot1 { set build_define "BUILD_SLOT1_ONLY" }
+        slot2 { set build_define "BUILD_SLOT2_ONLY" }
+        slot3 { set build_define "BUILD_SLOT3_ONLY" }
+        slot4 { set build_define "BUILD_SLOT4_ONLY" }
+        menu  { set build_define "BUILD_MENU_ONLY" }
+        full  { set build_define "" }
+        default {
+            puts "WARNING: unknown GAME_CONSOLE_BUILD=$::env(GAME_CONSOLE_BUILD), using full build"
+        }
+    }
+}
+
 set source_patterns [list \
     [file join $root_dir "src" "*.v"] \
     [file join $root_dir "src" "common" "*.v"] \
@@ -23,4 +39,8 @@ foreach pattern $source_patterns {
 
 add_files -fileset constrs_1 [file join $root_dir "constraints" "game_console.xdc"]
 set_property top game_console_top [current_fileset]
+if {$build_define ne ""} {
+    set_property verilog_define [list $build_define] [current_fileset]
+    puts "Using synthesis define: $build_define"
+}
 update_compile_order -fileset sources_1
