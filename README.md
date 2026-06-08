@@ -2,7 +2,7 @@
 
 目标板卡：`Nexys A7-100T`，器件 `XC7A100T-1CSG324C`。
 
-这个目录是最终集合机项目的起点。当前方案保留已经完成的坦克大战作为 `slot0`，另外预留 `slot1` 到 `slot4` 给四名成员分别实现自己的游戏。
+这个目录是最终集合机项目的起点。当前方案把原来的空 `slot1` 替换为已经完成的坦克大战，因此集合机现在包含四个游戏槽：`slot1` 到 `slot4`。
 
 ## 当前选择方式
 
@@ -14,13 +14,12 @@
 
 | 菜单项 | 游戏 |
 | --- | --- |
-| `TANK WAR` | 坦克大战，复用 `src/games/tank/tank_top.v` |
-| `GAME ONE` | `src/games/slot1/game_slot1_top.v` |
+| `TANK WAR` | `src/games/slot1/game_slot1_top.v`，内部包装 `src/games/tank/tank_top.v` |
 | `GAME TWO` | `src/games/slot2/game_slot2_top.v` |
 | `GAME THREE` | `src/games/slot3/game_slot3_top.v` |
 | `GAME FOUR` | `src/games/slot4/game_slot4_top.v` |
 
-`slot1` 到 `slot4` 目前是占位画面，之后成员只需要保持模块名和端口不变即可替换内部实现。
+四个菜单项分别对应 `slot1` 到 `slot4`。成员只需要保持各自 `game_slotN_top` 的模块名和端口不变即可合并。
 
 ## Vivado 建工程
 

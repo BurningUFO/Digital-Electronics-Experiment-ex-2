@@ -24,8 +24,8 @@ make -f sim/verilator/Makefile run
 只跑单个 slot，其余 stub 掉，大幅减少 eval 计算量：
 
 ```bash
-make -f sim/verilator/Makefile run-tank    # 只跑坦克
-make -f sim/verilator/Makefile run-slot1   # 只跑 slot1
+make -f sim/verilator/Makefile run-tank    # 只跑坦克槽位
+make -f sim/verilator/Makefile run-slot1   # 只跑 slot1（坦克槽位）
 make -f sim/verilator/Makefile run-slot2   # 只跑 slot2
 make -f sim/verilator/Makefile run-slot3   # 只跑 slot3（Matrix）
 make -f sim/verilator/Makefile run-slot4   # 只跑 slot4

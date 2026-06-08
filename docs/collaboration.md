@@ -4,13 +4,12 @@
 
 | 槽位 | 负责人 | 文件夹 | 顶层模块 |
 | --- | --- | --- | --- |
-| `slot0` | 已有坦克大战 | `src/games/tank/` | `tank_top` |
-| `slot1` | 成员 A | `src/games/slot1/` | `game_slot1_top` |
+| `slot1` | 坦克大战 | `src/games/slot1/` | `game_slot1_top` |
 | `slot2` | 成员 B | `src/games/slot2/` | `game_slot2_top` |
 | `slot3` | 成员 C | `src/games/slot3/` | `game_slot3_top` |
 | `slot4` | 成员 D | `src/games/slot4/` | `game_slot4_top` |
 
-如果坦克大战也由某位成员维护，该成员只维护 `src/games/tank/`，不要把坦克内部模块名复制到其他槽位。
+坦克大战的 legacy 实现仍放在 `src/games/tank/`，由 `src/games/slot1/game_slot1_top.v` 包装接入菜单。维护坦克时优先改 `src/games/tank/`，不要把坦克内部模块名复制到其他槽位。
 
 ## 合并规则
 
@@ -44,4 +43,4 @@
 
 坦克大战现在仍是 legacy 顶层：它自己生成 VGA 时序并自己解析 PS/2。这样能最快接入集合机，但不是最终最干净的架构。
 
-后续如果时间允许，建议把坦克重构成 `game_slot0_top` 风格：由总顶层统一给 `pixel_x/pixel_y/frame_tick`，坦克只输出 RGB 和状态信号。这样五个游戏的接口会完全一致。
+后续如果时间允许，建议把坦克从 legacy 顶层重构成标准 `game_slot1_top` 风格：由总顶层统一给 `pixel_x/pixel_y/frame_tick`，坦克只输出 RGB 和状态信号。这样四个游戏的接口会完全一致。

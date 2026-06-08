@@ -12,9 +12,9 @@ nexys_game_console/
 │  │  └─ blank_game_slot.v        # 空槽位占位画面
 │  └─ games/
 │     ├─ tank/
-│     │  └─ tank_top.v            # 从 extended_tank_war 复制的 legacy 坦克顶层
+│     │  └─ tank_top.v            # legacy 坦克顶层，由 slot1 包装接入
 │     ├─ slot1/
-│     │  └─ game_slot1_top.v
+│     │  └─ game_slot1_top.v      # 坦克大战槽位包装
 │     ├─ slot2/
 │     │  └─ game_slot2_top.v
 │     ├─ slot3/
@@ -29,4 +29,4 @@ nexys_game_console/
    └─ create_vivado_project.tcl
 ```
 
-设计原则：总顶层稳定，成员槽位可替换。每个游戏只要保持自己的顶层模块名和端口，就能直接被 `game_console_top` 复用。
+设计原则：总顶层稳定，四个游戏槽位可替换。每个游戏只要保持自己的顶层模块名和端口，就能直接被 `game_console_top` 复用。
