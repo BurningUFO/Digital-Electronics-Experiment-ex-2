@@ -25,16 +25,17 @@ module slot2_game_core (
     output reg  [2:0]  line_clear_count
 );
 
-    localparam ST_PLAYING       = 3'd0;
-    localparam ST_HARD_DROP     = 3'd1;
-    localparam ST_CLEAR_ANIM    = 3'd2;
-    localparam ST_ROW_SCAN      = 3'd3;
-    localparam ST_COMPACT_PREP  = 3'd4;
-    localparam ST_COMPACT_SCAN  = 3'd5;
-    localparam ST_COMPACT_APPLY = 3'd6;
-    localparam ST_GAME_OVER     = 3'd7;
+    localparam ST_PLAYING       = 4'd0;
+    localparam ST_HARD_DROP     = 4'd1;
+    localparam ST_LOCK_ROW      = 4'd2;
+    localparam ST_CLEAR_ANIM    = 4'd3;
+    localparam ST_ROW_SCAN      = 4'd4;
+    localparam ST_COMPACT_PREP  = 4'd5;
+    localparam ST_COMPACT_SCAN  = 4'd6;
+    localparam ST_COMPACT_APPLY = 4'd7;
+    localparam ST_GAME_OVER     = 4'd8;
 
-    reg [2:0] state;
+    reg [3:0] state;
     reg [4:0] clear_delay;
 
     reg [199:0] board_reg;
@@ -55,6 +56,11 @@ module slot2_game_core (
     reg [4:0]  compact_src;
     reg [4:0]  compact_dst;
     reg [2:0]  rows_to_clear;
+    reg [1:0]  lock_row_idx;
+    reg [5:0]  ghost_probe_y;
+    reg        ghost_busy;
+    reg        ghost_eval_valid;
+    reg        ghost_blocked_q;
 
     assign board = board_reg;
     assign piece_type = cur_type;
@@ -153,37 +159,53 @@ module slot2_game_core (
         end
     endfunction
 
+    function row_collision;
+        input signed [4:0] px;
+        input [6:0] py;
+        input [1:0] row_idx;
+        input [3:0] row_bits;
+        integer col;
+        reg [6:0] abs_y;
+        reg signed [5:0] abs_x;
+        reg [9:0] board_bits;
+        reg hit;
+        begin
+            abs_y = py + {5'd0, row_idx};
+            board_bits = 10'd0;
+            hit = 1'b0;
+
+            if (row_bits != 4'd0) begin
+                if (abs_y[6] || abs_y >= 7'd20) begin
+                    hit = 1'b1;
+                end else begin
+                    board_bits = board_row(abs_y[4:0]);
+                    for (col = 0; col < 4; col = col + 1) begin
+                        if (row_bits[col]) begin
+                            abs_x = px + col;
+                            if (abs_x < 0 || abs_x >= 10 || board_bits[abs_x[3:0]]) begin
+                                hit = 1'b1;
+                            end
+                        end
+                    end
+                end
+            end
+
+            row_collision = hit;
+        end
+    endfunction
+
     function collision;
         input signed [4:0] px;
         input [6:0] py;
         input [1:0] prot;
         input [2:0] ptype;
-        reg hit;
-        integer row;
-        integer col;
-        reg [6:0] abs_y;
-        reg signed [5:0] abs_x;
         reg [15:0] shape;
-        reg [9:0] board_bits;
         begin
             shape = piece_shape(ptype, prot);
-            hit = 1'b0;
-            for (row = 0; row < 4; row = row + 1) begin
-                for (col = 0; col < 4; col = col + 1) begin
-                    if (shape[row*4 + col]) begin
-                        abs_y = py + {5'd0, row[1:0]};
-                        abs_x = px + col;
-                        if (abs_x < 0 || abs_x >= 10 || abs_y[6] || abs_y >= 7'd20) begin
-                            hit = 1'b1;
-                        end else begin
-                            board_bits = board_row(abs_y[4:0]);
-                            if (board_bits[abs_x[3:0]])
-                                hit = 1'b1;
-                        end
-                    end
-                end
-            end
-            collision = hit;
+            collision = row_collision(px, py, 2'd0, shape[3:0]) |
+                        row_collision(px, py, 2'd1, shape[7:4]) |
+                        row_collision(px, py, 2'd2, shape[11:8]) |
+                        row_collision(px, py, 2'd3, shape[15:12]);
         end
     endfunction
 
@@ -244,6 +266,28 @@ module slot2_game_core (
         end
     endfunction
 
+    function [9:0] lock_row_mask;
+        input signed [4:0] px;
+        input [1:0] row_idx;
+        input [1:0] prot;
+        input [2:0] ptype;
+        integer col;
+        reg [3:0] row_bits;
+        reg signed [5:0] abs_x;
+        begin
+            row_bits = shape_row_bits(piece_shape(ptype, prot), row_idx);
+            lock_row_mask = 10'd0;
+            for (col = 0; col < 4; col = col + 1) begin
+                if (row_bits[col]) begin
+                    abs_x = px + col;
+                    if (!(abs_x < 0 || abs_x >= 10)) begin
+                        lock_row_mask[abs_x[3:0]] = 1'b1;
+                    end
+                end
+            end
+        end
+    endfunction
+
     function [9:0] level_goal;
         input [3:0] lvl;
         begin
@@ -274,6 +318,31 @@ module slot2_game_core (
     wire [9:0] next_level_goal = level_goal(level_reg);
     wire [15:0] level_factor = {12'd0, level_reg} + 16'd1;
     wire current_row_full = &board_row(row_scan_idx);
+    wire ghost_probe_blocked = collision(cur_x, {1'b0, ghost_probe_y} + 7'd1, cur_rot, cur_type);
+    wire [6:0] lock_abs_y = {1'b0, cur_y} + {5'd0, lock_row_idx};
+    wire [9:0] lock_mask = lock_row_mask(cur_x, lock_row_idx, cur_rot, cur_type);
+
+    task start_ghost_calc;
+        input [5:0] start_y;
+        begin
+            ghost_probe_y <= start_y;
+            ghost_y_reg <= start_y;
+            ghost_busy <= 1'b1;
+            ghost_eval_valid <= 1'b0;
+            ghost_blocked_q <= 1'b0;
+        end
+    endtask
+
+    task begin_lock_piece;
+        begin
+            lock_row_idx <= 2'd0;
+            ghost_busy <= 1'b0;
+            ghost_eval_valid <= 1'b0;
+            ghost_blocked_q <= 1'b0;
+            lock_pulse <= 1'b1;
+            state <= ST_LOCK_ROW;
+        end
+    endtask
 
     always @(posedge clk) begin
         if (reset) begin
@@ -297,6 +366,11 @@ module slot2_game_core (
             compact_src <= 5'd0;
             compact_dst <= 5'd0;
             rows_to_clear <= 3'd0;
+            lock_row_idx <= 2'd0;
+            ghost_probe_y <= 6'd0;
+            ghost_busy <= 1'b0;
+            ghost_eval_valid <= 1'b0;
+            ghost_blocked_q <= 1'b0;
             lock_pulse <= 1'b0;
             line_clear_pulse <= 1'b0;
             line_clear_count <= 3'd0;
@@ -313,55 +387,64 @@ module slot2_game_core (
                         cur_rot <= 2'd0;
                         cur_x <= 5'sd3;
                         cur_y <= 6'd0;
-                        ghost_y_reg <= 6'd0;
+                        start_ghost_calc(6'd0);
                         nxt_type <= (lfsr[2:0] < 3'd7) ? lfsr[2:0] :
                                     (lfsr[5:3] < 3'd7) ? lfsr[5:3] : 3'd0;
                         if (collision(5'sd3, 7'd0, 2'd0, nxt_type)) begin
                             state <= ST_GAME_OVER;
+                            ghost_busy <= 1'b0;
+                            ghost_eval_valid <= 1'b0;
                         end
                     end else begin
-                        if (!collision(cur_x, {1'b0, ghost_y_reg} + 7'd1, cur_rot, cur_type)) begin
-                            ghost_y_reg <= ghost_y_reg + 6'd1;
+                        if (ghost_busy) begin
+                            if (!ghost_eval_valid) begin
+                                ghost_blocked_q <= ghost_probe_blocked;
+                                ghost_eval_valid <= 1'b1;
+                            end else if (ghost_blocked_q) begin
+                                ghost_y_reg <= ghost_probe_y;
+                                ghost_busy <= 1'b0;
+                                ghost_eval_valid <= 1'b0;
+                            end else begin
+                                ghost_probe_y <= ghost_probe_y + 6'd1;
+                                ghost_y_reg <= ghost_probe_y + 6'd1;
+                                ghost_eval_valid <= 1'b0;
+                            end
                         end
 
                         if (hard_drop) begin
                             state <= ST_HARD_DROP;
+                            ghost_busy <= 1'b0;
+                            ghost_eval_valid <= 1'b0;
                         end else if (gravity_tick || soft_drop) begin
                             if (!collision(cur_x, {1'b0, cur_y} + 7'd1, cur_rot, cur_type)) begin
                                 cur_y <= cur_y + 6'd1;
-                                ghost_y_reg <= cur_y + 6'd1;
+                                start_ghost_calc(cur_y + 6'd1);
                             end else begin
-                                board_reg <= lock_to_board(board_reg, cur_x, {1'b0, cur_y}, cur_rot, cur_type);
-                                lock_pulse <= 1'b1;
-                                state <= ST_CLEAR_ANIM;
-                                clear_delay <= 5'd20;
+                                begin_lock_piece();
                             end
                         end else begin
                             if (move_left && !collision(cur_x - 5'sd1, {1'b0, cur_y}, cur_rot, cur_type)) begin
                                 cur_x <= cur_x - 5'sd1;
-                                ghost_y_reg <= cur_y;
-                            end
-                            if (move_right && !collision(cur_x + 5'sd1, {1'b0, cur_y}, cur_rot, cur_type)) begin
+                                start_ghost_calc(cur_y);
+                            end else if (move_right && !collision(cur_x + 5'sd1, {1'b0, cur_y}, cur_rot, cur_type)) begin
                                 cur_x <= cur_x + 5'sd1;
-                                ghost_y_reg <= cur_y;
-                            end
-
-                            if (rotate_cw) begin
+                                start_ghost_calc(cur_y);
+                            end else if (rotate_cw) begin
                                 if (!collision(cur_x, {1'b0, cur_y}, cur_rot + 2'd1, cur_type)) begin
                                     cur_rot <= cur_rot + 2'd1;
-                                    ghost_y_reg <= cur_y;
+                                    start_ghost_calc(cur_y);
                                 end else if (!collision(cur_x - 5'sd1, {1'b0, cur_y}, cur_rot + 2'd1, cur_type)) begin
                                     cur_rot <= cur_rot + 2'd1;
                                     cur_x <= cur_x - 5'sd1;
-                                    ghost_y_reg <= cur_y;
+                                    start_ghost_calc(cur_y);
                                 end else if (!collision(cur_x + 5'sd1, {1'b0, cur_y}, cur_rot + 2'd1, cur_type)) begin
                                     cur_rot <= cur_rot + 2'd1;
                                     cur_x <= cur_x + 5'sd1;
-                                    ghost_y_reg <= cur_y;
+                                    start_ghost_calc(cur_y);
                                 end else if (cur_y > 6'd0 && !collision(cur_x, {1'b0, cur_y} - 7'd1, cur_rot + 2'd1, cur_type)) begin
                                     cur_rot <= cur_rot + 2'd1;
                                     cur_y <= cur_y - 6'd1;
-                                    ghost_y_reg <= cur_y - 6'd1;
+                                    start_ghost_calc(cur_y - 6'd1);
                                 end
                             end
                         end
@@ -371,12 +454,41 @@ module slot2_game_core (
                 ST_HARD_DROP: begin
                     if (!collision(cur_x, {1'b0, cur_y} + 7'd1, cur_rot, cur_type)) begin
                         cur_y <= cur_y + 6'd1;
-                        ghost_y_reg <= cur_y + 6'd1;
                     end else begin
-                        board_reg <= lock_to_board(board_reg, cur_x, {1'b0, cur_y}, cur_rot, cur_type);
-                        lock_pulse <= 1'b1;
+                        begin_lock_piece();
+                    end
+                end
+
+                ST_LOCK_ROW: begin
+                    case (lock_abs_y)
+                        7'd0:  board_reg[0 +: 10]   <= board_reg[0 +: 10]   | lock_mask;
+                        7'd1:  board_reg[10 +: 10]  <= board_reg[10 +: 10]  | lock_mask;
+                        7'd2:  board_reg[20 +: 10]  <= board_reg[20 +: 10]  | lock_mask;
+                        7'd3:  board_reg[30 +: 10]  <= board_reg[30 +: 10]  | lock_mask;
+                        7'd4:  board_reg[40 +: 10]  <= board_reg[40 +: 10]  | lock_mask;
+                        7'd5:  board_reg[50 +: 10]  <= board_reg[50 +: 10]  | lock_mask;
+                        7'd6:  board_reg[60 +: 10]  <= board_reg[60 +: 10]  | lock_mask;
+                        7'd7:  board_reg[70 +: 10]  <= board_reg[70 +: 10]  | lock_mask;
+                        7'd8:  board_reg[80 +: 10]  <= board_reg[80 +: 10]  | lock_mask;
+                        7'd9:  board_reg[90 +: 10]  <= board_reg[90 +: 10]  | lock_mask;
+                        7'd10: board_reg[100 +: 10] <= board_reg[100 +: 10] | lock_mask;
+                        7'd11: board_reg[110 +: 10] <= board_reg[110 +: 10] | lock_mask;
+                        7'd12: board_reg[120 +: 10] <= board_reg[120 +: 10] | lock_mask;
+                        7'd13: board_reg[130 +: 10] <= board_reg[130 +: 10] | lock_mask;
+                        7'd14: board_reg[140 +: 10] <= board_reg[140 +: 10] | lock_mask;
+                        7'd15: board_reg[150 +: 10] <= board_reg[150 +: 10] | lock_mask;
+                        7'd16: board_reg[160 +: 10] <= board_reg[160 +: 10] | lock_mask;
+                        7'd17: board_reg[170 +: 10] <= board_reg[170 +: 10] | lock_mask;
+                        7'd18: board_reg[180 +: 10] <= board_reg[180 +: 10] | lock_mask;
+                        7'd19: board_reg[190 +: 10] <= board_reg[190 +: 10] | lock_mask;
+                        default: ;
+                    endcase
+
+                    if (lock_row_idx == 2'd3) begin
                         state <= ST_CLEAR_ANIM;
                         clear_delay <= 5'd20;
+                    end else begin
+                        lock_row_idx <= lock_row_idx + 2'd1;
                     end
                 end
 

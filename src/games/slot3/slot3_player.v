@@ -14,8 +14,8 @@ module slot3_player (
     output reg  [9:0]  neo_x,
     output reg  [8:0]  neo_y,
     output reg  [1:0]  neo_dir,
-    output wire [9:0]  try_x,
-    output wire [8:0]  try_y,
+    output reg  [9:0]  try_x,
+    output reg  [8:0]  try_y,
     output reg         has_bullet_time,
     output reg  [8:0]  bt_timer,
     output reg  [8:0]  bt_cooldown,
@@ -52,9 +52,9 @@ module slot3_player (
     reg [9:0] candidate_x;
     reg [8:0] candidate_y;
     reg move_req;
-
-    assign try_x = candidate_x;
-    assign try_y = candidate_y;
+    reg move_pending;
+    reg move_wait;
+    reg [1:0] move_dir_pending;
 
     always @(*) begin
         candidate_x = neo_x;
@@ -95,24 +95,47 @@ module slot3_player (
             input_down_q <= 1'b0;
             input_left_q <= 1'b0;
             input_right_q <= 1'b0;
+            try_x <= 10'd48;
+            try_y <= 9'd384;
+            move_pending <= 1'b0;
+            move_wait <= 1'b0;
+            move_dir_pending <= 2'd1;
         end else begin
             input_up_q <= input_up;
             input_down_q <= input_down;
             input_left_q <= input_left;
             input_right_q <= input_right;
 
+            if (move_pending) begin
+                if (move_wait) begin
+                    move_wait <= 1'b0;
+                end else begin
+                    if (walkable) begin
+                        neo_x <= try_x;
+                        neo_y <= try_y;
+                        neo_dir <= move_dir_pending;
+                    end
+                    move_pending <= 1'b0;
+                end
+            end
+
             if (frame_tick) begin
                 if (bt_timer != 9'd0) bt_timer <= bt_timer - 9'd1;
                 if (bt_cooldown != 9'd0) bt_cooldown <= bt_cooldown - 9'd1;
                 if (attract_timer != 8'd0) attract_timer <= attract_timer - 8'd1;
 
-                if (move_req && walkable) begin
-                    neo_x <= candidate_x;
-                    neo_y <= candidate_y;
-                    if (input_up_q) neo_dir <= 2'd0;
-                    else if (input_right_q) neo_dir <= 2'd1;
-                    else if (input_down_q) neo_dir <= 2'd2;
-                    else if (input_left_q) neo_dir <= 2'd3;
+                if (!move_pending && move_req) begin
+                    try_x <= candidate_x;
+                    try_y <= candidate_y;
+                    move_pending <= 1'b1;
+                    move_wait <= 1'b1;
+                    if (input_up_q) move_dir_pending <= 2'd0;
+                    else if (input_right_q) move_dir_pending <= 2'd1;
+                    else if (input_down_q) move_dir_pending <= 2'd2;
+                    else move_dir_pending <= 2'd3;
+                end else if (!move_pending) begin
+                    try_x <= neo_x;
+                    try_y <= neo_y;
                 end
             end
 

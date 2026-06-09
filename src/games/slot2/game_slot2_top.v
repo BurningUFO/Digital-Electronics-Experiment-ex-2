@@ -50,6 +50,18 @@ module game_slot2_top (
     wire [3:0]  render_r;
     wire [3:0]  render_g;
     wire [3:0]  render_b;
+    (* keep = "true" *) reg         selected_video_q;
+    (* keep = "true" *) reg [199:0] board_video_q;
+    (* keep = "true" *) reg [2:0]   piece_type_video_q;
+    (* keep = "true" *) reg [1:0]   piece_rotation_video_q;
+    (* keep = "true" *) reg signed [4:0] piece_x_video_q;
+    (* keep = "true" *) reg [5:0]   piece_y_video_q;
+    (* keep = "true" *) reg [5:0]   ghost_piece_y_video_q;
+    (* keep = "true" *) reg [2:0]   next_type_video_q;
+    (* keep = "true" *) reg [15:0]  score_video_q;
+    (* keep = "true" *) reg [9:0]   lines_video_q;
+    (* keep = "true" *) reg [3:0]   level_video_q;
+    (* keep = "true" *) reg         game_over_video_q;
 
     // sub-modules
     slot2_tick_gen u_tick (
@@ -94,18 +106,48 @@ module game_slot2_top (
 
     slot2_renderer u_render (
         .clk(clk), .reset(reset),
-        .selected(selected),
+        .selected(selected_video_q),
         .display_active(display_active),
         .pixel_x(pixel_x), .pixel_y(pixel_y),
-        .board(board),
-        .piece_type(piece_type), .piece_rotation(piece_rotation),
-        .piece_x(piece_x), .piece_y(piece_y),
-        .ghost_piece_y(ghost_piece_y),
-        .next_type(next_type),
-        .score(score), .lines(lines), .level(level),
-        .game_over(game_over),
+        .board(board_video_q),
+        .piece_type(piece_type_video_q), .piece_rotation(piece_rotation_video_q),
+        .piece_x(piece_x_video_q), .piece_y(piece_y_video_q),
+        .ghost_piece_y(ghost_piece_y_video_q),
+        .next_type(next_type_video_q),
+        .score(score_video_q), .lines(lines_video_q), .level(level_video_q),
+        .game_over(game_over_video_q),
         .vga_r(render_r), .vga_g(render_g), .vga_b(render_b)
     );
+
+    always @(posedge clk) begin
+        if (reset) begin
+            selected_video_q <= 1'b0;
+            board_video_q <= 200'd0;
+            piece_type_video_q <= 3'd0;
+            piece_rotation_video_q <= 2'd0;
+            piece_x_video_q <= 5'sd0;
+            piece_y_video_q <= 6'd0;
+            ghost_piece_y_video_q <= 6'd0;
+            next_type_video_q <= 3'd0;
+            score_video_q <= 16'd0;
+            lines_video_q <= 10'd0;
+            level_video_q <= 4'd0;
+            game_over_video_q <= 1'b0;
+        end else if (pixel_tick) begin
+            selected_video_q <= selected;
+            board_video_q <= board;
+            piece_type_video_q <= piece_type;
+            piece_rotation_video_q <= piece_rotation;
+            piece_x_video_q <= piece_x;
+            piece_y_video_q <= piece_y;
+            ghost_piece_y_video_q <= ghost_piece_y;
+            next_type_video_q <= next_type;
+            score_video_q <= score;
+            lines_video_q <= lines;
+            level_video_q <= level;
+            game_over_video_q <= game_over;
+        end
+    end
 
     always @(posedge clk) begin
         if (reset) begin
