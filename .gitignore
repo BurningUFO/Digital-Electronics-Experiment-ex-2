@@ -16,3 +16,4 @@ xsim.dir/
 *.pb
 dfx_runtime.txt
 game3_preview/
+.claude/

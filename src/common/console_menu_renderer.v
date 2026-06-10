@@ -25,6 +25,7 @@ module console_menu_renderer (
     localparam integer ITEM_TEXT_OFFSET_Y = 12;
     localparam integer ITEM_SCALE = 3;
     localparam integer ITEM_COUNT = 11;
+    localparam integer ITEM_STEP = ITEM_H + ITEM_GAP;
 
     localparam integer HELP_X = 92;
     localparam integer HELP_Y = 438;
@@ -33,7 +34,6 @@ module console_menu_renderer (
 
     reg [25:0] blink_counter;
 
-    integer item_idx;
     integer item_y;
     integer title_rel_x;
     integer title_rel_y;
@@ -114,26 +114,13 @@ module console_menu_renderer (
                         2: item_char = "M";
                         3: item_char = "E";
                         4: item_char = " ";
-                        5: item_char = "O";
-                        6: item_char = "N";
-                        7: item_char = "E";
-                        default: item_char = " ";
-                    endcase
-                end
-                3'd2: begin
-                    case (idx)
-                        0: item_char = "G";
-                        1: item_char = "A";
-                        2: item_char = "M";
-                        3: item_char = "E";
-                        4: item_char = " ";
                         5: item_char = "T";
                         6: item_char = "W";
                         7: item_char = "O";
                         default: item_char = " ";
                     endcase
                 end
-                3'd3: begin
+                3'd2: begin
                     case (idx)
                         0: item_char = "G";
                         1: item_char = "A";
@@ -148,7 +135,7 @@ module console_menu_renderer (
                         default: item_char = " ";
                     endcase
                 end
-                default: begin
+                3'd3: begin
                     case (idx)
                         0: item_char = "G";
                         1: item_char = "A";
@@ -161,6 +148,9 @@ module console_menu_renderer (
                         8: item_char = "R";
                         default: item_char = " ";
                     endcase
+                end
+                default: begin
+                    item_char = " ";
                 end
             endcase
         end
@@ -410,6 +400,134 @@ module console_menu_renderer (
         end
     endfunction
 
+    function [9:0] mul30_4;
+        input [3:0] value;
+        begin
+            mul30_4 = ({6'd0, value} << 5) - ({6'd0, value} << 1);
+        end
+    endfunction
+
+    function [9:0] mul18_5;
+        input [4:0] value;
+        begin
+            mul18_5 = ({5'd0, value} << 4) + ({5'd0, value} << 1);
+        end
+    endfunction
+
+    function [9:0] mul12_6;
+        input [5:0] value;
+        begin
+            mul12_6 = ({4'd0, value} << 3) + ({4'd0, value} << 2);
+        end
+    endfunction
+
+    function [3:0] div30_u10;
+        input [9:0] value;
+        begin
+            if (value < 10'd30) div30_u10 = 4'd0;
+            else if (value < 10'd60) div30_u10 = 4'd1;
+            else if (value < 10'd90) div30_u10 = 4'd2;
+            else if (value < 10'd120) div30_u10 = 4'd3;
+            else if (value < 10'd150) div30_u10 = 4'd4;
+            else if (value < 10'd180) div30_u10 = 4'd5;
+            else if (value < 10'd210) div30_u10 = 4'd6;
+            else if (value < 10'd240) div30_u10 = 4'd7;
+            else if (value < 10'd270) div30_u10 = 4'd8;
+            else if (value < 10'd300) div30_u10 = 4'd9;
+            else if (value < 10'd330) div30_u10 = 4'd10;
+            else div30_u10 = 4'd11;
+        end
+    endfunction
+
+    function [4:0] div18_u10;
+        input [9:0] value;
+        begin
+            if (value < 10'd18) div18_u10 = 5'd0;
+            else if (value < 10'd36) div18_u10 = 5'd1;
+            else if (value < 10'd54) div18_u10 = 5'd2;
+            else if (value < 10'd72) div18_u10 = 5'd3;
+            else if (value < 10'd90) div18_u10 = 5'd4;
+            else if (value < 10'd108) div18_u10 = 5'd5;
+            else if (value < 10'd126) div18_u10 = 5'd6;
+            else if (value < 10'd144) div18_u10 = 5'd7;
+            else if (value < 10'd162) div18_u10 = 5'd8;
+            else if (value < 10'd180) div18_u10 = 5'd9;
+            else div18_u10 = 5'd10;
+        end
+    endfunction
+
+    function [5:0] div12_u10;
+        input [9:0] value;
+        begin
+            if (value < 10'd12) div12_u10 = 6'd0;
+            else if (value < 10'd24) div12_u10 = 6'd1;
+            else if (value < 10'd36) div12_u10 = 6'd2;
+            else if (value < 10'd48) div12_u10 = 6'd3;
+            else if (value < 10'd60) div12_u10 = 6'd4;
+            else if (value < 10'd72) div12_u10 = 6'd5;
+            else if (value < 10'd84) div12_u10 = 6'd6;
+            else if (value < 10'd96) div12_u10 = 6'd7;
+            else if (value < 10'd108) div12_u10 = 6'd8;
+            else if (value < 10'd120) div12_u10 = 6'd9;
+            else if (value < 10'd132) div12_u10 = 6'd10;
+            else if (value < 10'd144) div12_u10 = 6'd11;
+            else if (value < 10'd156) div12_u10 = 6'd12;
+            else if (value < 10'd168) div12_u10 = 6'd13;
+            else if (value < 10'd180) div12_u10 = 6'd14;
+            else if (value < 10'd192) div12_u10 = 6'd15;
+            else if (value < 10'd204) div12_u10 = 6'd16;
+            else if (value < 10'd216) div12_u10 = 6'd17;
+            else if (value < 10'd228) div12_u10 = 6'd18;
+            else if (value < 10'd240) div12_u10 = 6'd19;
+            else if (value < 10'd252) div12_u10 = 6'd20;
+            else if (value < 10'd264) div12_u10 = 6'd21;
+            else if (value < 10'd276) div12_u10 = 6'd22;
+            else if (value < 10'd288) div12_u10 = 6'd23;
+            else if (value < 10'd300) div12_u10 = 6'd24;
+            else if (value < 10'd312) div12_u10 = 6'd25;
+            else if (value < 10'd324) div12_u10 = 6'd26;
+            else if (value < 10'd336) div12_u10 = 6'd27;
+            else if (value < 10'd348) div12_u10 = 6'd28;
+            else if (value < 10'd360) div12_u10 = 6'd29;
+            else if (value < 10'd372) div12_u10 = 6'd30;
+            else if (value < 10'd384) div12_u10 = 6'd31;
+            else if (value < 10'd396) div12_u10 = 6'd32;
+            else if (value < 10'd408) div12_u10 = 6'd33;
+            else if (value < 10'd420) div12_u10 = 6'd34;
+            else if (value < 10'd432) div12_u10 = 6'd35;
+            else if (value < 10'd444) div12_u10 = 6'd36;
+            else if (value < 10'd456) div12_u10 = 6'd37;
+            else if (value < 10'd468) div12_u10 = 6'd38;
+            else div12_u10 = 6'd39;
+        end
+    endfunction
+
+    function [2:0] div5_u6;
+        input [5:0] value;
+        begin
+            if (value < 6'd5) div5_u6 = 3'd0;
+            else if (value < 6'd10) div5_u6 = 3'd1;
+            else if (value < 6'd15) div5_u6 = 3'd2;
+            else if (value < 6'd20) div5_u6 = 3'd3;
+            else if (value < 6'd25) div5_u6 = 3'd4;
+            else if (value < 6'd30) div5_u6 = 3'd5;
+            else div5_u6 = 3'd6;
+        end
+    endfunction
+
+    function [2:0] div3_u5;
+        input [4:0] value;
+        begin
+            if (value < 5'd3) div3_u5 = 3'd0;
+            else if (value < 5'd6) div3_u5 = 3'd1;
+            else if (value < 5'd9) div3_u5 = 3'd2;
+            else if (value < 5'd12) div3_u5 = 3'd3;
+            else if (value < 5'd15) div3_u5 = 3'd4;
+            else if (value < 5'd18) div3_u5 = 3'd5;
+            else div3_u5 = 3'd6;
+        end
+    endfunction
+
     always @(*) begin
         title_on = 1'b0;
         item_text_on = 1'b0;
@@ -419,6 +537,7 @@ module console_menu_renderer (
         item_border = 1'b0;
         active_item = 3'd0;
         item_char_value = " ";
+        item_y = ITEM_Y0;
 
         if (display_active) begin
             title_rel_x = pixel_x - TITLE_X;
@@ -426,35 +545,49 @@ module console_menu_renderer (
             if ((title_rel_x >= 0) && (title_rel_y >= 0) &&
                 (title_rel_x < TITLE_COUNT * 6 * TITLE_SCALE) &&
                 (title_rel_y < 7 * TITLE_SCALE)) begin
-                title_char_idx = title_rel_x / (6 * TITLE_SCALE);
-                title_cell_x = (title_rel_x / TITLE_SCALE) - (title_char_idx * 6);
-                title_cell_y = title_rel_y / TITLE_SCALE;
+                title_char_idx = div30_u10(title_rel_x[9:0]);
+                title_cell_x = div5_u6(title_rel_x[9:0] - mul30_4(title_char_idx[3:0]));
+                title_cell_y = div5_u6(title_rel_y[5:0]);
                 title_on = glyph_pixel(title_char(title_char_idx), title_cell_x, title_cell_y);
             end
 
-            for (item_idx = 0; item_idx < 5; item_idx = item_idx + 1) begin
-                item_y = ITEM_Y0 + item_idx * (ITEM_H + ITEM_GAP);
-                if ((pixel_x >= ITEM_X) && (pixel_x < ITEM_X + ITEM_W) &&
-                    (pixel_y >= item_y) && (pixel_y < item_y + ITEM_H)) begin
+            if ((pixel_x >= ITEM_X) && (pixel_x < ITEM_X + ITEM_W)) begin
+                if ((pixel_y >= ITEM_Y0) && (pixel_y < ITEM_Y0 + ITEM_H)) begin
                     item_body = 1'b1;
-                    active_item = item_idx[2:0];
-                    selected_item = (cursor == item_idx[2:0]);
-                    item_border = (pixel_x < ITEM_X + 10'd4) ||
-                                  (pixel_x >= ITEM_X + ITEM_W - 10'd4) ||
-                                  (pixel_y < item_y + 10'd4) ||
-                                  (pixel_y >= item_y + ITEM_H - 10'd4);
+                    active_item = 3'd0;
+                    item_y = ITEM_Y0;
+                end else if ((pixel_y >= ITEM_Y0 + ITEM_STEP) && (pixel_y < ITEM_Y0 + ITEM_STEP + ITEM_H)) begin
+                    item_body = 1'b1;
+                    active_item = 3'd1;
+                    item_y = ITEM_Y0 + ITEM_STEP;
+                end else if ((pixel_y >= ITEM_Y0 + (2 * ITEM_STEP)) && (pixel_y < ITEM_Y0 + (2 * ITEM_STEP) + ITEM_H)) begin
+                    item_body = 1'b1;
+                    active_item = 3'd2;
+                    item_y = ITEM_Y0 + (2 * ITEM_STEP);
+                end else if ((pixel_y >= ITEM_Y0 + (3 * ITEM_STEP)) && (pixel_y < ITEM_Y0 + (3 * ITEM_STEP) + ITEM_H)) begin
+                    item_body = 1'b1;
+                    active_item = 3'd3;
+                    item_y = ITEM_Y0 + (3 * ITEM_STEP);
+                end
+            end
 
-                    item_rel_x = pixel_x - ITEM_TEXT_X;
-                    item_rel_y = pixel_y - (item_y + ITEM_TEXT_OFFSET_Y);
-                    if ((item_rel_x >= 0) && (item_rel_y >= 0) &&
-                        (item_rel_x < ITEM_COUNT * 6 * ITEM_SCALE) &&
-                        (item_rel_y < 7 * ITEM_SCALE)) begin
-                        item_char_idx = item_rel_x / (6 * ITEM_SCALE);
-                        item_cell_x = (item_rel_x / ITEM_SCALE) - (item_char_idx * 6);
-                        item_cell_y = item_rel_y / ITEM_SCALE;
-                        item_char_value = item_char(item_idx[2:0], item_char_idx);
-                        item_text_on = glyph_pixel(item_char_value, item_cell_x, item_cell_y);
-                    end
+            if (item_body) begin
+                selected_item = (cursor == active_item);
+                item_border = (pixel_x < ITEM_X + 10'd4) ||
+                              (pixel_x >= ITEM_X + ITEM_W - 10'd4) ||
+                              (pixel_y < item_y + 10'd4) ||
+                              (pixel_y >= item_y + ITEM_H - 10'd4);
+
+                item_rel_x = pixel_x - ITEM_TEXT_X;
+                item_rel_y = pixel_y - (item_y + ITEM_TEXT_OFFSET_Y);
+                if ((item_rel_x >= 0) && (item_rel_y >= 0) &&
+                    (item_rel_x < ITEM_COUNT * 6 * ITEM_SCALE) &&
+                    (item_rel_y < 7 * ITEM_SCALE)) begin
+                    item_char_idx = div18_u10(item_rel_x[9:0]);
+                    item_cell_x = div3_u5(item_rel_x[9:0] - mul18_5(item_char_idx[4:0]));
+                    item_cell_y = div3_u5(item_rel_y[4:0]);
+                    item_char_value = item_char(active_item, item_char_idx);
+                    item_text_on = glyph_pixel(item_char_value, item_cell_x, item_cell_y);
                 end
             end
 
@@ -463,9 +596,9 @@ module console_menu_renderer (
             if ((help_rel_x >= 0) && (help_rel_y >= 0) &&
                 (help_rel_x < HELP_COUNT * 6 * HELP_SCALE) &&
                 (help_rel_y < 7 * HELP_SCALE)) begin
-                help_char_idx = help_rel_x / (6 * HELP_SCALE);
-                help_cell_x = (help_rel_x / HELP_SCALE) - (help_char_idx * 6);
-                help_cell_y = help_rel_y / HELP_SCALE;
+                help_char_idx = div12_u10(help_rel_x[9:0]);
+                help_cell_x = (help_rel_x[9:0] - mul12_6(help_char_idx[5:0])) >> 1;
+                help_cell_y = help_rel_y[3:1];
                 help_on = glyph_pixel(help_char(help_char_idx), help_cell_x, help_cell_y);
             end
         end

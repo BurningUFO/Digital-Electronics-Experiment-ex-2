@@ -23,6 +23,10 @@ report_timing \
     -input_pins \
     -file [file join $report_dir "timing_worst_50.rpt"]
 
+report_exceptions \
+    -all \
+    -file [file join $report_dir "timing_exceptions.rpt"]
+
 report_utilization \
     -hierarchical \
     -file [file join $report_dir "utilization_hierarchical.rpt"]

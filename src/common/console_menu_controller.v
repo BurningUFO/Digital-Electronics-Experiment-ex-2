@@ -18,6 +18,7 @@ module console_menu_controller (
     localparam [7:0] SCAN_ESC   = 8'h76;
     localparam [7:0] SCAN_UP    = 8'h75;
     localparam [7:0] SCAN_DOWN  = 8'h72;
+    localparam [2:0] MENU_LAST_ITEM = 3'd3;
 
     reg break_pending;
     reg extend_pending;
@@ -52,9 +53,9 @@ module console_menu_controller (
                     if (!break_pending) begin
                         if (menu_active) begin
                             if (is_up_key) begin
-                                cursor <= (cursor == 3'd0) ? 3'd4 : cursor - 3'd1;
+                                cursor <= (cursor == 3'd0) ? MENU_LAST_ITEM : cursor - 3'd1;
                             end else if (is_down_key) begin
-                                cursor <= (cursor == 3'd4) ? 3'd0 : cursor + 3'd1;
+                                cursor <= (cursor == MENU_LAST_ITEM) ? 3'd0 : cursor + 3'd1;
                             end else if (is_start_key) begin
                                 game_sel <= cursor;
                                 menu_active <= 1'b0;

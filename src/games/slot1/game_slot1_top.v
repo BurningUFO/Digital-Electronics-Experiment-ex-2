@@ -15,6 +15,8 @@ module game_slot1_top (
     input  wire [15:0] sw,
     input  wire        ps2_clk,
     input  wire        ps2_data,
+    input  wire        ps2_byte_ready,
+    input  wire [7:0]  ps2_byte_data,
     output wire [3:0]  vga_r,
     output wire [3:0]  vga_g,
     output wire [3:0]  vga_b,
@@ -31,42 +33,43 @@ module game_slot1_top (
     output wire        buzzer
 );
 
-    blank_game_slot #(
-        .SLOT_ID(3'd1),
-        .BASE_R(4'h2),
-        .BASE_G(4'h9),
-        .BASE_B(4'hD)
-    ) u_blank_game_slot (
-        .clk(clk),
-        .reset(reset),
+    wire _unused_slot1_api = &{
+        1'b0,
+        frame_tick,
+        btn_u,
+        btn_d,
+        btn_l,
+        btn_r,
+        btn_c,
+        sw,
+        ps2_clk,
+        ps2_data
+    };
+
+    tank_top u_tank_top (
+        .CLK100MHZ(clk),
+        .reset(reset | ~selected),
         .selected(selected),
-        .frame_tick(frame_tick),
         .pixel_tick(pixel_tick),
         .display_active(display_active),
         .pixel_x(pixel_x),
         .pixel_y(pixel_y),
-        .btn_u(btn_u),
-        .btn_d(btn_d),
-        .btn_l(btn_l),
-        .btn_r(btn_r),
-        .btn_c(btn_c),
-        .sw(sw),
-        .ps2_clk(ps2_clk),
-        .ps2_data(ps2_data),
-        .vga_r(vga_r),
-        .vga_g(vga_g),
-        .vga_b(vga_b),
-        .led(led),
-        .an(an),
-        .ca(ca),
-        .cb(cb),
-        .cc(cc),
-        .cd(cd),
-        .ce(ce),
-        .cf(cf),
-        .cg(cg),
-        .dp(dp),
-        .buzzer(buzzer)
+        .ps2_byte_ready(ps2_byte_ready),
+        .ps2_byte_data(ps2_byte_data),
+        .BUZZER(buzzer),
+        .LED(led),
+        .AN(an),
+        .CA(ca),
+        .CB(cb),
+        .CC(cc),
+        .CD(cd),
+        .CE(ce),
+        .CF(cf),
+        .CG(cg),
+        .DP(dp),
+        .VGA_R(vga_r),
+        .VGA_G(vga_g),
+        .VGA_B(vga_b)
     );
 
 endmodule

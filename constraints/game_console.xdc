@@ -7,8 +7,10 @@ set_property IOSTANDARD LVCMOS33 [get_ports CPU_RESETN]
 
 set_property PACKAGE_PIN F4 [get_ports PS2_CLK]
 set_property IOSTANDARD LVCMOS33 [get_ports PS2_CLK]
+set_property PULLUP true [get_ports PS2_CLK]
 set_property PACKAGE_PIN B2 [get_ports PS2_DATA]
 set_property IOSTANDARD LVCMOS33 [get_ports PS2_DATA]
+set_property PULLUP true [get_ports PS2_DATA]
 
 set_property PACKAGE_PIN N17 [get_ports BTNC]
 set_property IOSTANDARD LVCMOS33 [get_ports BTNC]

@@ -20,6 +20,8 @@ module blank_game_slot #(
     input  wire [15:0] sw,
     input  wire        ps2_clk,
     input  wire        ps2_data,
+    input  wire        ps2_byte_ready,
+    input  wire [7:0]  ps2_byte_data,
     output reg  [3:0]  vga_r,
     output reg  [3:0]  vga_g,
     output reg  [3:0]  vga_b,
@@ -50,7 +52,8 @@ module blank_game_slot #(
     assign stripe = pixel_x[8:4] == (frame_counter[8:4] + {2'b00, SLOT_ID});
     assign input_active = btn_u | btn_d | btn_l | btn_r | btn_c |
                           sw[0] | sw[1] | sw[2] | sw[3] |
-                          ps2_clk | ps2_data | pixel_tick;
+                          ps2_clk | ps2_data | ps2_byte_ready |
+                          (|ps2_byte_data) | pixel_tick;
 
     always @(posedge clk) begin
         if (reset) begin

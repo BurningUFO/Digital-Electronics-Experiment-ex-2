@@ -1,8 +1,13 @@
 module tank_top (
     input  wire       CLK100MHZ,
-    input  wire       CPU_RESETN,
-    input  wire       PS2_CLK,
-    input  wire       PS2_DATA,
+    input  wire       reset,
+    input  wire       selected,
+    input  wire       pixel_tick,
+    input  wire       display_active,
+    input  wire [9:0] pixel_x,
+    input  wire [9:0] pixel_y,
+    input  wire       ps2_byte_ready,
+    input  wire [7:0] ps2_byte_data,
     output wire       BUZZER,
     output wire [15:0] LED,
     output wire [7:0] AN,
@@ -16,22 +21,13 @@ module tank_top (
     output wire       DP,
     output reg  [3:0] VGA_R,
     output reg  [3:0] VGA_G,
-    output reg  [3:0] VGA_B,
-    output reg        VGA_HS,
-    output reg        VGA_VS
+    output reg  [3:0] VGA_B
 );
 
     reg [3:0] rgb_r;
     reg [3:0] rgb_g;
     reg [3:0] rgb_b;
 
-    wire reset;
-    wire pixel_tick;
-    wire display_active;
-    wire [9:0] pixel_x;
-    wire [9:0] pixel_y;
-    wire sync_hs;
-    wire sync_vs;
     wire [5:0] tile_x;
     wire [4:0] tile_y;
     wire [1:0] tile_type;
@@ -60,8 +56,6 @@ module tank_top (
     wire       p2_move_req;
     wire       p1_fire_pulse;
     wire       p2_fire_pulse;
-    wire       ps2_byte_ready;
-    wire [7:0] ps2_byte_data;
     wire [10:0] p1_next_x;
     wire [9:0]  p1_next_y;
     wire [10:0] p2_next_x;
@@ -239,7 +233,6 @@ module tank_top (
     localparam [1:0] RESULT_P2   = 2'd2;
     localparam [1:0] RESULT_DRAW = 2'd3;
 
-    assign reset = ~CPU_RESETN;
     assign tile_x = pixel_x[9:4];
     assign tile_y = pixel_y[8:4];
     assign local_x = pixel_x[3:0];
@@ -425,11 +418,11 @@ module tank_top (
     assign explosion_local_x = pixel_x - explosion_x[9:0];
     assign explosion_local_y = pixel_y - explosion_y;
     assign seg_digit = seg_scan_sel ? {2'b00, p2_lives} : {2'b00, p1_lives};
-    assign AN = seg_scan_sel ? 8'b1111_1110 : 8'b0111_1111;
-    assign {CA, CB, CC, CD, CE, CF, CG} = seg_pattern_n;
+    assign AN = selected ? (seg_scan_sel ? 8'b1111_1110 : 8'b0111_1111) : 8'b1111_1111;
+    assign {CA, CB, CC, CD, CE, CF, CG} = selected ? seg_pattern_n : 7'b1111111;
     assign DP = 1'b1;
-    assign BUZZER = buzzer_n;
-    assign LED = {
+    assign BUZZER = selected ? buzzer_n : 1'b1;
+    assign LED = selected ? {
         (game_result == RESULT_DRAW),
         game_result[1],
         game_result[0],
@@ -446,27 +439,7 @@ module tank_top (
         p1_lives[0],
         p2_fire,
         p1_fire
-    };
-
-    vga_sync u_vga_sync (
-        .clk            (CLK100MHZ),
-        .reset          (reset),
-        .pixel_tick     (pixel_tick),
-        .display_active (display_active),
-        .pixel_x        (pixel_x),
-        .pixel_y        (pixel_y),
-        .hsync          (sync_hs),
-        .vsync          (sync_vs)
-    );
-
-    ps2_rx u_ps2_rx (
-        .clk        (CLK100MHZ),
-        .reset      (reset),
-        .ps2_clk    (PS2_CLK),
-        .ps2_data   (PS2_DATA),
-        .byte_ready (ps2_byte_ready),
-        .byte_data  (ps2_byte_data)
-    );
+    } : 16'h0000;
 
     keyboard_dual_mapper u_keyboard_dual_mapper (
         .clk        (CLK100MHZ),
@@ -804,8 +777,6 @@ module tank_top (
             VGA_R             <= 4'h0;
             VGA_G             <= 4'h0;
             VGA_B             <= 4'h0;
-            VGA_HS            <= 1'b1;
-            VGA_VS            <= 1'b1;
         end else begin
             p1_fire_prev <= p1_fire;
             p2_fire_prev <= p2_fire;
@@ -1007,14 +978,10 @@ module tank_top (
             VGA_R  <= 4'h0;
             VGA_G  <= 4'h0;
             VGA_B  <= 4'h0;
-            VGA_HS <= 1'b1;
-            VGA_VS <= 1'b1;
         end else if (pixel_tick) begin
             VGA_R <= rgb_r;
             VGA_G <= rgb_g;
             VGA_B <= rgb_b;
-            VGA_HS <= sync_hs;
-            VGA_VS <= sync_vs;
         end
     end
 
@@ -1798,101 +1765,6 @@ module seg7_digit_decoder (
 
 endmodule
 
-module ps2_rx (
-    input  wire clk,
-    input  wire reset,
-    input  wire ps2_clk,
-    input  wire ps2_data,
-    output reg  byte_ready,
-    output reg [7:0] byte_data
-);
-
-    reg ps2_clk_ff0;
-    reg ps2_clk_ff1;
-    reg ps2_data_ff0;
-    reg ps2_data_ff1;
-    reg [3:0] bit_count;
-    reg [7:0] shift_data;
-    wire ps2_clk_fall;
-
-    assign ps2_clk_fall = ps2_clk_ff1 & ~ps2_clk_ff0;
-
-    always @(posedge clk) begin
-        if (reset) begin
-            ps2_clk_ff0 <= 1'b1;
-            ps2_clk_ff1 <= 1'b1;
-            ps2_data_ff0 <= 1'b1;
-            ps2_data_ff1 <= 1'b1;
-            bit_count <= 4'd0;
-            shift_data <= 8'd0;
-            byte_ready <= 1'b0;
-            byte_data <= 8'd0;
-        end else begin
-            ps2_clk_ff0 <= ps2_clk;
-            ps2_clk_ff1 <= ps2_clk_ff0;
-            ps2_data_ff0 <= ps2_data;
-            ps2_data_ff1 <= ps2_data_ff0;
-            byte_ready <= 1'b0;
-
-            if (ps2_clk_fall) begin
-                case (bit_count)
-                    4'd0: begin
-                        if (ps2_data_ff1 == 1'b0) begin
-                            bit_count <= 4'd1;
-                        end
-                    end
-                    4'd1: begin
-                        shift_data[0] <= ps2_data_ff1;
-                        bit_count <= 4'd2;
-                    end
-                    4'd2: begin
-                        shift_data[1] <= ps2_data_ff1;
-                        bit_count <= 4'd3;
-                    end
-                    4'd3: begin
-                        shift_data[2] <= ps2_data_ff1;
-                        bit_count <= 4'd4;
-                    end
-                    4'd4: begin
-                        shift_data[3] <= ps2_data_ff1;
-                        bit_count <= 4'd5;
-                    end
-                    4'd5: begin
-                        shift_data[4] <= ps2_data_ff1;
-                        bit_count <= 4'd6;
-                    end
-                    4'd6: begin
-                        shift_data[5] <= ps2_data_ff1;
-                        bit_count <= 4'd7;
-                    end
-                    4'd7: begin
-                        shift_data[6] <= ps2_data_ff1;
-                        bit_count <= 4'd8;
-                    end
-                    4'd8: begin
-                        shift_data[7] <= ps2_data_ff1;
-                        bit_count <= 4'd9;
-                    end
-                    4'd9: begin
-                        bit_count <= 4'd10;
-                    end
-                    4'd10: begin
-                        if (ps2_data_ff1 == 1'b1) begin
-                            byte_data <= shift_data;
-                            byte_ready <= 1'b1;
-                        end
-                        bit_count <= 4'd0;
-                    end
-                    default: begin
-                        bit_count <= 4'd0;
-                    end
-                endcase
-            end
-        end
-    end
-
-endmodule
-
 module keyboard_dual_mapper (
     input  wire       clk,
     input  wire       reset,
@@ -2426,97 +2298,6 @@ module tile_renderer (
                     end
                 end
             endcase
-        end
-    end
-
-endmodule
-
-module vga_sync (
-    input  wire       clk,
-    input  wire       reset,
-    output wire       pixel_tick,
-    output wire       display_active,
-    output wire [9:0] pixel_x,
-    output wire [9:0] pixel_y,
-    output reg        hsync,
-    output reg        vsync
-);
-
-    localparam integer H_VISIBLE = 640;
-`ifdef SIM_SHORT_BLANK
-    localparam integer H_FRONT   = 2;
-    localparam integer H_SYNC    = 4;
-    localparam integer H_BACK    = 2;
-`else
-    localparam integer H_FRONT   = 16;
-    localparam integer H_SYNC    = 96;
-    localparam integer H_BACK    = 48;
-`endif
-    localparam integer H_TOTAL   = H_VISIBLE + H_FRONT + H_SYNC + H_BACK;
-
-    localparam integer V_VISIBLE = 480;
-`ifdef SIM_SHORT_BLANK
-    localparam integer V_FRONT   = 1;
-    localparam integer V_SYNC    = 1;
-    localparam integer V_BACK    = 1;
-`else
-    localparam integer V_FRONT   = 10;
-    localparam integer V_SYNC    = 2;
-    localparam integer V_BACK    = 33;
-`endif
-    localparam integer V_TOTAL   = V_VISIBLE + V_FRONT + V_SYNC + V_BACK;
-
-    reg [1:0] pix_div = 2'b00;
-    reg [9:0] h_count = 10'd0;
-    reg [9:0] v_count = 10'd0;
-
-`ifdef SIM_FAST_VGA
-    assign pixel_tick = 1'b1;
-`else
-    assign pixel_tick = (pix_div == 2'b11);
-`endif
-    assign display_active = (h_count < H_VISIBLE) && (v_count < V_VISIBLE);
-    assign pixel_x = h_count;
-    assign pixel_y = v_count;
-
-    always @(posedge clk) begin
-        if (reset) begin
-            pix_div <= 2'b00;
-        end else begin
-`ifndef SIM_FAST_VGA
-            pix_div <= pix_div + 2'b01;
-`endif
-        end
-    end
-
-    always @(posedge clk) begin
-        if (reset) begin
-            h_count <= 10'd0;
-            v_count <= 10'd0;
-        end else if (pixel_tick) begin
-            if (h_count == H_TOTAL - 1) begin
-                h_count <= 10'd0;
-                if (v_count == V_TOTAL - 1) begin
-                    v_count <= 10'd0;
-                end else begin
-                    v_count <= v_count + 10'd1;
-                end
-            end else begin
-                h_count <= h_count + 10'd1;
-            end
-        end
-    end
-
-    always @(posedge clk) begin
-        if (reset) begin
-            hsync <= 1'b1;
-            vsync <= 1'b1;
-        end else if (pixel_tick) begin
-            hsync <= ~((h_count >= H_VISIBLE + H_FRONT) &&
-                       (h_count <  H_VISIBLE + H_FRONT + H_SYNC));
-
-            vsync <= ~((v_count >= V_VISIBLE + V_FRONT) &&
-                       (v_count <  V_VISIBLE + V_FRONT + V_SYNC));
         end
     end
 

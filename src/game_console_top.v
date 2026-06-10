@@ -32,7 +32,6 @@ module game_console_top (
     wire [2:0] menu_cursor;
     wire menu_active;
     wire menu_launch_pulse;
-    wire tank_selected;
     wire slot1_selected;
     wire slot2_selected;
     wire slot3_selected;
@@ -50,23 +49,9 @@ module game_console_top (
     wire [3:0] menu_vga_r;
     wire [3:0] menu_vga_g;
     wire [3:0] menu_vga_b;
-
-    wire [3:0] tank_vga_r;
-    wire [3:0] tank_vga_g;
-    wire [3:0] tank_vga_b;
-    wire tank_vga_hs;
-    wire tank_vga_vs;
-    wire [15:0] tank_led;
-    wire [7:0] tank_an;
-    wire tank_ca;
-    wire tank_cb;
-    wire tank_cc;
-    wire tank_cd;
-    wire tank_ce;
-    wire tank_cf;
-    wire tank_cg;
-    wire tank_dp;
-    wire tank_buzzer;
+    reg  [3:0] menu_vga_r_q;
+    reg  [3:0] menu_vga_g_q;
+    reg  [3:0] menu_vga_b_q;
 
     wire [3:0] slot1_vga_r;
     wire [3:0] slot1_vga_g;
@@ -107,16 +92,27 @@ module game_console_top (
     wire [7:0] active_slot_an;
     wire [7:0] active_slot_seg;
     wire active_slot_buzzer;
-    wire [7:0] tank_seg;
     wire [7:0] active_seg;
 
     assign reset = ~CPU_RESETN;
 
-    assign tank_selected = !menu_active && (game_sel == 3'd0);
-    assign slot1_selected = !menu_active && (game_sel == 3'd1);
-    assign slot2_selected = !menu_active && (game_sel == 3'd2);
-    assign slot3_selected = !menu_active && (game_sel == 3'd3);
-    assign slot4_selected = !menu_active && (game_sel == 3'd4);
+    assign slot1_selected = !menu_active && (game_sel == 3'd0);
+    assign slot2_selected = !menu_active && (game_sel == 3'd1);
+    assign slot3_selected = !menu_active && (game_sel == 3'd2);
+    assign slot4_selected = !menu_active && (game_sel == 3'd3);
+
+    // Menu rendering is sampled once per pixel; game slots register RGB at their own boundary.
+    always @(posedge CLK100MHZ) begin
+        if (reset) begin
+            menu_vga_r_q <= 4'h0;
+            menu_vga_g_q <= 4'h0;
+            menu_vga_b_q <= 4'h0;
+        end else if (console_pixel_tick) begin
+            menu_vga_r_q <= menu_vga_r;
+            menu_vga_g_q <= menu_vga_g;
+            menu_vga_b_q <= menu_vga_b;
+        end
+    end
 
     console_vga_sync u_console_vga_sync (
         .clk(CLK100MHZ),
@@ -163,31 +159,34 @@ module game_console_top (
         .vga_b(menu_vga_b)
     );
 
-    tank_top u_tank_top (
-        .CLK100MHZ(CLK100MHZ),
-        .CPU_RESETN(CPU_RESETN & tank_selected),
-        .PS2_CLK(PS2_CLK),
-        .PS2_DATA(PS2_DATA),
-        .BUZZER(tank_buzzer),
-        .LED(tank_led),
-        .AN(tank_an),
-        .CA(tank_ca),
-        .CB(tank_cb),
-        .CC(tank_cc),
-        .CD(tank_cd),
-        .CE(tank_ce),
-        .CF(tank_cf),
-        .CG(tank_cg),
-        .DP(tank_dp),
-        .VGA_R(tank_vga_r),
-        .VGA_G(tank_vga_g),
-        .VGA_B(tank_vga_b),
-        .VGA_HS(tank_vga_hs),
-        .VGA_VS(tank_vga_vs)
-    );
+`ifdef BUILD_TANK_ONLY
+    `define STUB_SLOT2
+    `define STUB_SLOT3
+    `define STUB_SLOT4
+`elsif BUILD_SLOT1_ONLY
+    `define STUB_SLOT2
+    `define STUB_SLOT3
+    `define STUB_SLOT4
+`elsif BUILD_SLOT2_ONLY
+    `define STUB_SLOT1
+    `define STUB_SLOT3
+    `define STUB_SLOT4
+`elsif BUILD_SLOT3_ONLY
+    `define STUB_SLOT1
+    `define STUB_SLOT2
+    `define STUB_SLOT4
+`elsif BUILD_SLOT4_ONLY
+    `define STUB_SLOT1
+    `define STUB_SLOT2
+    `define STUB_SLOT3
+`elsif BUILD_MENU_ONLY
+    `define STUB_SLOT1
+    `define STUB_SLOT2
+    `define STUB_SLOT3
+    `define STUB_SLOT4
+`endif
 
 `ifdef SIM_TANK_ONLY
-    `define STUB_SLOT1
     `define STUB_SLOT2
     `define STUB_SLOT3
     `define STUB_SLOT4
@@ -235,6 +234,8 @@ module game_console_top (
         .sw(SW),
         .ps2_clk(PS2_CLK),
         .ps2_data(PS2_DATA),
+        .ps2_byte_ready(console_ps2_byte_ready),
+        .ps2_byte_data(console_ps2_byte_data),
         .vga_r(slot1_vga_r),
         .vga_g(slot1_vga_g),
         .vga_b(slot1_vga_b),
@@ -278,6 +279,8 @@ module game_console_top (
         .sw(SW),
         .ps2_clk(PS2_CLK),
         .ps2_data(PS2_DATA),
+        .ps2_byte_ready(console_ps2_byte_ready),
+        .ps2_byte_data(console_ps2_byte_data),
         .vga_r(slot2_vga_r),
         .vga_g(slot2_vga_g),
         .vga_b(slot2_vga_b),
@@ -321,6 +324,8 @@ module game_console_top (
         .sw(SW),
         .ps2_clk(PS2_CLK),
         .ps2_data(PS2_DATA),
+        .ps2_byte_ready(console_ps2_byte_ready),
+        .ps2_byte_data(console_ps2_byte_data),
         .vga_r(slot3_vga_r),
         .vga_g(slot3_vga_g),
         .vga_b(slot3_vga_b),
@@ -364,6 +369,8 @@ module game_console_top (
         .sw(SW),
         .ps2_clk(PS2_CLK),
         .ps2_data(PS2_DATA),
+        .ps2_byte_ready(console_ps2_byte_ready),
+        .ps2_byte_data(console_ps2_byte_data),
         .vga_r(slot4_vga_r),
         .vga_g(slot4_vga_g),
         .vga_b(slot4_vga_b),
@@ -411,33 +418,23 @@ module game_console_top (
                                 slot3_selected ? slot3_buzzer :
                                                  slot4_buzzer;
 
-    assign tank_seg = {tank_ca, tank_cb, tank_cc, tank_cd, tank_ce, tank_cf, tank_cg, tank_dp};
-    assign active_seg = tank_selected ? tank_seg : active_slot_seg;
+    assign active_seg = active_slot_seg;
 
     assign LED = menu_active ? (16'h8000 | (16'h0001 << menu_cursor)) :
-                 tank_selected ? tank_led :
-                                 active_slot_led;
+                                active_slot_led;
     assign AN = menu_active ? 8'b1111_1111 :
-                tank_selected ? tank_an :
-                                active_slot_an;
+                               active_slot_an;
     assign {CA, CB, CC, CD, CE, CF, CG, DP} = menu_active ? 8'hff : active_seg;
     assign BUZZER = menu_active ? 1'b1 :
-                    tank_selected ? tank_buzzer :
-                                    active_slot_buzzer;
+                                      active_slot_buzzer;
 
     always @(*) begin
         if (menu_active) begin
-            VGA_R = menu_vga_r;
-            VGA_G = menu_vga_g;
-            VGA_B = menu_vga_b;
+            VGA_R = menu_vga_r_q;
+            VGA_G = menu_vga_g_q;
+            VGA_B = menu_vga_b_q;
             VGA_HS = console_hs;
             VGA_VS = console_vs;
-        end else if (tank_selected) begin
-            VGA_R = tank_vga_r;
-            VGA_G = tank_vga_g;
-            VGA_B = tank_vga_b;
-            VGA_HS = tank_vga_hs;
-            VGA_VS = tank_vga_vs;
         end else begin
             VGA_R = active_slot_vga_r;
             VGA_G = active_slot_vga_g;
@@ -446,5 +443,18 @@ module game_console_top (
             VGA_VS = console_vs;
         end
     end
+
+`ifdef STUB_SLOT1
+    `undef STUB_SLOT1
+`endif
+`ifdef STUB_SLOT2
+    `undef STUB_SLOT2
+`endif
+`ifdef STUB_SLOT3
+    `undef STUB_SLOT3
+`endif
+`ifdef STUB_SLOT4
+    `undef STUB_SLOT4
+`endif
 
 endmodule

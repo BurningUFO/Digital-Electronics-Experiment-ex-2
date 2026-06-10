@@ -29,6 +29,8 @@ module game_slotN_top (
     input  wire [15:0] sw,
     input  wire        ps2_clk,
     input  wire        ps2_data,
+    input  wire        ps2_byte_ready,
+    input  wire [7:0]  ps2_byte_data,
     output wire [3:0]  vga_r,
     output wire [3:0]  vga_g,
     output wire [3:0]  vga_b,
@@ -53,6 +55,8 @@ module game_slotN_top (
 - `display_active=0` 时 `vga_r/g/b` 应输出 `0`。
 - `buzzer=1` 表示静音；如果使用低有效蜂鸣器，响铃时才短暂输出 `0`。
 - 七段数码管为低有效，空闲建议 `an=8'hff`、`ca..dp=1`。
+- 如果使用 PS/2，优先使用总顶层解析后的 `ps2_byte_ready/ps2_byte_data`，不要在槽位里重复实例化 PS/2 接收器。
+- `ps2_clk/ps2_data` 只作为槽位 API 兼容端口保留；当前槽位都应使用 `ps2_byte_ready/ps2_byte_data`，不要直接采样物理 PS/2 线。
 - 如果使用 PS/2，必须在 `selected=0` 或 `reset=1` 时停止改变游戏状态。
 - 全局游戏选择由集合机菜单处理，成员游戏不要再用 `SW[2:0]` 做游戏选择。
 
