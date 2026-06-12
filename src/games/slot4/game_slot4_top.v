@@ -57,6 +57,20 @@ module game_slot4_top (
     localparam [3:0] TILE_BUTTON     = 4'd9;
     localparam [3:0] TILE_GATE       = 4'd10;
 
+    localparam [3:0] PHYS_IDLE           = 4'd0;
+    localparam [3:0] PHYS_FIRE_X_TEST    = 4'd1;
+    localparam [3:0] PHYS_FIRE_X_EVAL    = 4'd2;
+    localparam [3:0] PHYS_FIRE_X_APPLY   = 4'd3;
+    localparam [3:0] PHYS_WATER_X_TEST   = 4'd4;
+    localparam [3:0] PHYS_WATER_X_EVAL   = 4'd5;
+    localparam [3:0] PHYS_WATER_X_APPLY  = 4'd6;
+    localparam [3:0] PHYS_FIRE_Y_TEST    = 4'd7;
+    localparam [3:0] PHYS_FIRE_Y_EVAL    = 4'd8;
+    localparam [3:0] PHYS_FIRE_Y_APPLY   = 4'd9;
+    localparam [3:0] PHYS_WATER_Y_TEST   = 4'd10;
+    localparam [3:0] PHYS_WATER_Y_EVAL   = 4'd11;
+    localparam [3:0] PHYS_WATER_Y_APPLY  = 4'd12;
+
     function [11:0] slot4_tile_addr;
         input [1:0] lvl;
         input [4:0] tx;
@@ -229,6 +243,10 @@ module game_slot4_top (
     reg [1:0] button_mask;
     reg [23:0] frame_counter;
     reg frame_tick_q;
+    reg status_eval_q;
+    reg status_apply_q;
+    reg frame_step_q;
+    reg [3:0] phys_state;
 
     reg btn_u_sync0;
     reg btn_u_sync1;
@@ -281,13 +299,49 @@ module game_slot4_top (
     reg [3:0] render_b;
     reg [6:0] seg_n;
 
-    reg signed [5:0] fire_vy_calc;
-    reg signed [5:0] water_vy_calc;
-    reg signed [11:0] fire_y_calc;
-    reg signed [11:0] water_y_calc;
-    reg [9:0] fire_x_calc;
-    reg [9:0] water_x_calc;
+    reg [9:0] phys_x_candidate;
+    reg signed [11:0] phys_y_candidate;
+    reg signed [5:0] phys_vy_candidate;
+    reg phys_blocked_q;
+    reg phys_collision_skip_q;
+    reg [11:0] phys_probe_addr0_q;
+    reg [11:0] phys_probe_addr1_q;
+    reg phys_probe_oob0_q;
+    reg phys_probe_oob1_q;
+    reg status_gate_open_q;
+    reg status_fire_all_gems_q;
+    reg status_water_all_gems_q;
+    reg gate_open_eval_q;
+    reg fire_grounded_eval_q;
+    reg water_grounded_eval_q;
+    reg level_complete_eval_q;
+    reg level_failed_eval_q;
+    reg [11:0] fire_status_addr0_q;
+    reg [11:0] fire_status_addr1_q;
+    reg [11:0] fire_status_addr2_q;
+    reg [11:0] fire_status_addr3_q;
+    reg [11:0] water_status_addr0_q;
+    reg [11:0] water_status_addr1_q;
+    reg [11:0] water_status_addr2_q;
+    reg [11:0] water_status_addr3_q;
+    reg [11:0] fire_ground_addr0_q;
+    reg [11:0] fire_ground_addr1_q;
+    reg [11:0] water_ground_addr0_q;
+    reg [11:0] water_ground_addr1_q;
     reg [1:0] next_level;
+
+    (* keep = "true" *) reg selected_video_q;
+    (* keep = "true" *) reg display_active_video_q;
+    (* keep = "true" *) reg [1:0] level_video_q;
+    (* keep = "true" *) reg won_video_q;
+    (* keep = "true" *) reg [9:0] fire_x_video_q;
+    (* keep = "true" *) reg [9:0] fire_y_video_q;
+    (* keep = "true" *) reg [9:0] water_x_video_q;
+    (* keep = "true" *) reg [9:0] water_y_video_q;
+    (* keep = "true" *) reg [3:0] fire_gems_video_q;
+    (* keep = "true" *) reg [3:0] water_gems_video_q;
+    (* keep = "true" *) reg gate_open_video_q;
+    (* keep = "true" *) reg [23:0] frame_counter_video_q;
 
     wire gate_open;
     wire fire_grounded;
@@ -315,13 +369,28 @@ module game_slot4_top (
     wire [1:0] button_pick_mask_now;
     wire level_complete_now;
     wire level_failed_now;
+    wire phys_probe_solid;
+    wire [3:0] fire_status_tile0;
+    wire [3:0] fire_status_tile1;
+    wire [3:0] fire_status_tile2;
+    wire [3:0] fire_status_tile3;
+    wire [3:0] water_status_tile0;
+    wire [3:0] water_status_tile1;
+    wire [3:0] water_status_tile2;
+    wire [3:0] water_status_tile3;
+    wire [3:0] fire_ground_tile0;
+    wire [3:0] fire_ground_tile1;
+    wire [3:0] water_ground_tile0;
+    wire [3:0] water_ground_tile1;
+    wire fire_grounded_eval_now;
+    wire water_grounded_eval_now;
+    wire level_complete_eval_now;
+    wire level_failed_eval_now;
 
     assign gate_open_now = (level == 2'd0) ? 1'b1 :
                        (level == 2'd1) ? button_mask[0] :
                                          (button_mask[0] | button_mask[1]);
     assign gate_open = gate_open_q;
-    assign fire_grounded_now = slot4_player_grounded(level, fire_x, fire_y, gate_open_now);
-    assign water_grounded_now = slot4_player_grounded(level, water_x, water_y, gate_open_now);
     assign fire_grounded = fire_grounded_q;
     assign water_grounded = water_grounded_q;
 
@@ -335,32 +404,76 @@ module game_slot4_top (
 
     assign fire_all_gems = (fire_gems[1:0] == 2'b11);
     assign water_all_gems = (water_gems[1:0] == 2'b11);
-    assign level_complete_now = fire_all_gems && water_all_gems &&
-                            slot4_player_touch_tile(level, fire_x, fire_y, TILE_FIRE_DOOR) &&
-                            slot4_player_touch_tile(level, water_x, water_y, TILE_WATER_DOOR);
-    assign level_failed_now = slot4_fire_bad(level, fire_x, fire_y) ||
-                          slot4_water_bad(level, water_x, water_y);
+    assign fire_status_tile0 = slot4_tile_rom[fire_status_addr0_q];
+    assign fire_status_tile1 = slot4_tile_rom[fire_status_addr1_q];
+    assign fire_status_tile2 = slot4_tile_rom[fire_status_addr2_q];
+    assign fire_status_tile3 = slot4_tile_rom[fire_status_addr3_q];
+    assign water_status_tile0 = slot4_tile_rom[water_status_addr0_q];
+    assign water_status_tile1 = slot4_tile_rom[water_status_addr1_q];
+    assign water_status_tile2 = slot4_tile_rom[water_status_addr2_q];
+    assign water_status_tile3 = slot4_tile_rom[water_status_addr3_q];
+    assign fire_ground_tile0 = slot4_tile_rom[fire_ground_addr0_q];
+    assign fire_ground_tile1 = slot4_tile_rom[fire_ground_addr1_q];
+    assign water_ground_tile0 = slot4_tile_rom[water_ground_addr0_q];
+    assign water_ground_tile1 = slot4_tile_rom[water_ground_addr1_q];
+    assign level_complete_eval_now = status_fire_all_gems_q && status_water_all_gems_q &&
+                            ((fire_status_tile0 == TILE_FIRE_DOOR) ||
+                             (fire_status_tile1 == TILE_FIRE_DOOR) ||
+                             (fire_status_tile2 == TILE_FIRE_DOOR) ||
+                             (fire_status_tile3 == TILE_FIRE_DOOR)) &&
+                            ((water_status_tile0 == TILE_WATER_DOOR) ||
+                             (water_status_tile1 == TILE_WATER_DOOR) ||
+                             (water_status_tile2 == TILE_WATER_DOOR) ||
+                             (water_status_tile3 == TILE_WATER_DOOR));
+    assign level_failed_eval_now = (fire_status_tile0 == TILE_WATER) ||
+                          (fire_status_tile1 == TILE_WATER) ||
+                          (fire_status_tile2 == TILE_WATER) ||
+                          (fire_status_tile3 == TILE_WATER) ||
+                          (fire_status_tile0 == TILE_POISON) ||
+                          (fire_status_tile1 == TILE_POISON) ||
+                          (fire_status_tile2 == TILE_POISON) ||
+                          (fire_status_tile3 == TILE_POISON) ||
+                          (water_status_tile0 == TILE_FIRE) ||
+                          (water_status_tile1 == TILE_FIRE) ||
+                          (water_status_tile2 == TILE_FIRE) ||
+                          (water_status_tile3 == TILE_FIRE) ||
+                          (water_status_tile0 == TILE_POISON) ||
+                          (water_status_tile1 == TILE_POISON) ||
+                          (water_status_tile2 == TILE_POISON) ||
+                          (water_status_tile3 == TILE_POISON);
+    assign level_complete_now = level_complete_eval_q;
+    assign level_failed_now = level_failed_eval_q;
     assign level_complete = level_complete_q;
     assign level_failed = level_failed_q;
     assign fire_pick_mask_now = slot4_fire_pick_mask(level, fire_x, fire_y);
     assign water_pick_mask_now = slot4_water_pick_mask(level, water_x, water_y);
     assign button_pick_mask_now = slot4_button_pick_mask(level, fire_x, fire_y, water_x, water_y);
+    assign phys_probe_solid =
+        phys_probe_oob0_q || phys_probe_oob1_q ||
+        slot4_is_solid_tile(slot4_tile_rom[phys_probe_addr0_q], gate_open_q) ||
+        slot4_is_solid_tile(slot4_tile_rom[phys_probe_addr1_q], gate_open_q);
+    assign fire_grounded_eval_now = slot4_is_solid_tile(fire_ground_tile0, status_gate_open_q) ||
+                                    slot4_is_solid_tile(fire_ground_tile1, status_gate_open_q);
+    assign water_grounded_eval_now = slot4_is_solid_tile(water_ground_tile0, status_gate_open_q) ||
+                                     slot4_is_solid_tile(water_ground_tile1, status_gate_open_q);
+    assign fire_grounded_now = fire_grounded_eval_q;
+    assign water_grounded_now = water_grounded_eval_q;
 
-    assign fire_pixel = selected && display_active && !won &&
-                        (pixel_x >= fire_x) && (pixel_x < fire_x + PLAYER_W) &&
-                        (pixel_y >= fire_y) && (pixel_y < fire_y + PLAYER_H);
+    assign fire_pixel = selected_video_q && display_active_video_q && !won_video_q &&
+                        (pixel_x >= fire_x_video_q) && (pixel_x < fire_x_video_q + PLAYER_W) &&
+                        (pixel_y >= fire_y_video_q) && (pixel_y < fire_y_video_q + PLAYER_H);
 
-    assign water_pixel = selected && display_active && !won &&
-                         (pixel_x >= water_x) && (pixel_x < water_x + PLAYER_W) &&
-                         (pixel_y >= water_y) && (pixel_y < water_y + PLAYER_H);
+    assign water_pixel = selected_video_q && display_active_video_q && !won_video_q &&
+                         (pixel_x >= water_x_video_q) && (pixel_x < water_x_video_q + PLAYER_W) &&
+                         (pixel_y >= water_y_video_q) && (pixel_y < water_y_video_q + PLAYER_H);
 
     assign fire_eye = fire_pixel &&
-                      (pixel_x >= fire_x + 10'd9) && (pixel_x <= fire_x + 10'd11) &&
-                      (pixel_y >= fire_y + 10'd5) && (pixel_y <= fire_y + 10'd7);
+                      (pixel_x >= fire_x_video_q + 10'd9) && (pixel_x <= fire_x_video_q + 10'd11) &&
+                      (pixel_y >= fire_y_video_q + 10'd5) && (pixel_y <= fire_y_video_q + 10'd7);
 
     assign water_eye = water_pixel &&
-                       (pixel_x >= water_x + 10'd2) && (pixel_x <= water_x + 10'd4) &&
-                       (pixel_y >= water_y + 10'd5) && (pixel_y <= water_y + 10'd7);
+                       (pixel_x >= water_x_video_q + 10'd2) && (pixel_x <= water_x_video_q + 10'd4) &&
+                       (pixel_y >= water_y_video_q + 10'd5) && (pixel_y <= water_y_video_q + 10'd7);
 
     slot4_keyboard_mapper u_slot4_keyboard_mapper (
         .clk(clk),
@@ -604,6 +717,87 @@ module game_slot4_top (
         end
     endfunction
 
+    task slot4_stage_solid_x_probe;
+        input [1:0] lvl;
+        input [9:0] px;
+        input [9:0] py;
+        input move_right;
+        reg [9:0] probe_x;
+        reg [9:0] probe_y0;
+        reg [9:0] probe_y1;
+        begin
+            probe_x = move_right ? (px + PLAYER_W - 1) : px;
+            probe_y0 = py + COLLIDE_INSET_Y;
+            probe_y1 = py + PLAYER_H - 1 - COLLIDE_INSET_Y;
+            phys_probe_oob0_q <= (probe_x >= SCREEN_W) || (probe_y0 >= SCREEN_H);
+            phys_probe_oob1_q <= (probe_x >= SCREEN_W) || (probe_y1 >= SCREEN_H);
+            phys_probe_addr0_q <= slot4_tile_addr(lvl, slot4_pixel_to_cell_x(probe_x),
+                                                  slot4_pixel_to_cell_y(probe_y0));
+            phys_probe_addr1_q <= slot4_tile_addr(lvl, slot4_pixel_to_cell_x(probe_x),
+                                                  slot4_pixel_to_cell_y(probe_y1));
+        end
+    endtask
+
+    task slot4_stage_solid_y_probe;
+        input [1:0] lvl;
+        input [9:0] px;
+        input [9:0] py;
+        input move_down;
+        reg [9:0] probe_x0;
+        reg [9:0] probe_x1;
+        reg [9:0] probe_y;
+        begin
+            probe_x0 = px + COLLIDE_INSET_X;
+            probe_x1 = px + PLAYER_W - 1 - COLLIDE_INSET_X;
+            probe_y = move_down ? (py + PLAYER_H - 1) : py;
+            phys_probe_oob0_q <= (probe_x0 >= SCREEN_W) || (probe_y >= SCREEN_H);
+            phys_probe_oob1_q <= (probe_x1 >= SCREEN_W) || (probe_y >= SCREEN_H);
+            phys_probe_addr0_q <= slot4_tile_addr(lvl, slot4_pixel_to_cell_x(probe_x0),
+                                                  slot4_pixel_to_cell_y(probe_y));
+            phys_probe_addr1_q <= slot4_tile_addr(lvl, slot4_pixel_to_cell_x(probe_x1),
+                                                  slot4_pixel_to_cell_y(probe_y));
+        end
+    endtask
+
+    task slot4_stage_status_probes;
+        input [1:0] lvl;
+        input [9:0] fx;
+        input [9:0] fy;
+        input [9:0] wx;
+        input [9:0] wy;
+        begin
+            status_gate_open_q <= gate_open_now;
+            status_fire_all_gems_q <= fire_all_gems;
+            status_water_all_gems_q <= water_all_gems;
+            fire_status_addr0_q <= slot4_tile_addr(lvl, slot4_pixel_to_cell_x(fx),
+                                                   slot4_pixel_to_cell_y(fy));
+            fire_status_addr1_q <= slot4_tile_addr(lvl, slot4_pixel_to_cell_x(fx + PLAYER_W - 1),
+                                                   slot4_pixel_to_cell_y(fy));
+            fire_status_addr2_q <= slot4_tile_addr(lvl, slot4_pixel_to_cell_x(fx),
+                                                   slot4_pixel_to_cell_y(fy + PLAYER_H - 1));
+            fire_status_addr3_q <= slot4_tile_addr(lvl, slot4_pixel_to_cell_x(fx + PLAYER_W - 1),
+                                                   slot4_pixel_to_cell_y(fy + PLAYER_H - 1));
+            water_status_addr0_q <= slot4_tile_addr(lvl, slot4_pixel_to_cell_x(wx),
+                                                    slot4_pixel_to_cell_y(wy));
+            water_status_addr1_q <= slot4_tile_addr(lvl, slot4_pixel_to_cell_x(wx + PLAYER_W - 1),
+                                                    slot4_pixel_to_cell_y(wy));
+            water_status_addr2_q <= slot4_tile_addr(lvl, slot4_pixel_to_cell_x(wx),
+                                                    slot4_pixel_to_cell_y(wy + PLAYER_H - 1));
+            water_status_addr3_q <= slot4_tile_addr(lvl, slot4_pixel_to_cell_x(wx + PLAYER_W - 1),
+                                                    slot4_pixel_to_cell_y(wy + PLAYER_H - 1));
+            fire_ground_addr0_q <= slot4_tile_addr(lvl, slot4_pixel_to_cell_x(fx + COLLIDE_INSET_X),
+                                                   slot4_pixel_to_cell_y(fy + PLAYER_H));
+            fire_ground_addr1_q <= slot4_tile_addr(lvl,
+                                                   slot4_pixel_to_cell_x(fx + PLAYER_W - 1 - COLLIDE_INSET_X),
+                                                   slot4_pixel_to_cell_y(fy + PLAYER_H));
+            water_ground_addr0_q <= slot4_tile_addr(lvl, slot4_pixel_to_cell_x(wx + COLLIDE_INSET_X),
+                                                    slot4_pixel_to_cell_y(wy + PLAYER_H));
+            water_ground_addr1_q <= slot4_tile_addr(lvl,
+                                                    slot4_pixel_to_cell_x(wx + PLAYER_W - 1 - COLLIDE_INSET_X),
+                                                    slot4_pixel_to_cell_y(wy + PLAYER_H));
+        end
+    endtask
+
     function slot4_player_touch_tile;
         input [1:0] lvl;
         input [9:0] px;
@@ -829,9 +1023,101 @@ module game_slot4_top (
         end
     endfunction
 
+    function [9:0] slot4_next_x_candidate;
+        input [9:0] px;
+        input left_cmd;
+        input right_cmd;
+        begin
+            if (left_cmd && !right_cmd)
+                slot4_next_x_candidate = (px > MOVE_STEP) ? px - MOVE_STEP : 10'd1;
+            else if (right_cmd && !left_cmd)
+                slot4_next_x_candidate = (px < SCREEN_W - PLAYER_W - MOVE_STEP) ?
+                                         px + MOVE_STEP :
+                                         SCREEN_W - PLAYER_W - 1;
+            else
+                slot4_next_x_candidate = px;
+        end
+    endfunction
+
+    function signed [5:0] slot4_next_fire_vy;
+        input signed [5:0] vy;
+        input jump_cmd;
+        input grounded;
+        begin
+            if (jump_cmd && grounded)
+                slot4_next_fire_vy = JUMP_VEL;
+            else if (vy < MAX_FALL)
+                slot4_next_fire_vy = vy + GRAVITY;
+            else
+                slot4_next_fire_vy = vy;
+        end
+    endfunction
+
+    function signed [5:0] slot4_next_water_vy;
+        input signed [5:0] vy;
+        input jump_cmd;
+        input grounded;
+        input down_cmd;
+        reg signed [5:0] next_vy;
+        begin
+            if (jump_cmd && grounded) begin
+                next_vy = JUMP_VEL;
+            end else if (vy < MAX_FALL) begin
+                next_vy = vy + GRAVITY;
+                if (down_cmd && next_vy < MAX_FALL)
+                    next_vy = next_vy + GRAVITY;
+            end else begin
+                next_vy = vy;
+            end
+
+            slot4_next_water_vy = next_vy;
+        end
+    endfunction
+
+    function signed [11:0] slot4_next_y_calc;
+        input [9:0] py;
+        input signed [5:0] vy;
+        begin
+            slot4_next_y_calc = $signed({2'b00, py}) + {{6{vy[5]}}, vy};
+        end
+    endfunction
+
     always @(posedge clk) begin
         if (reset) begin
             frame_tick_q <= 1'b0;
+            status_eval_q <= 1'b0;
+            status_apply_q <= 1'b0;
+            frame_step_q <= 1'b0;
+            phys_state <= PHYS_IDLE;
+            phys_x_candidate <= 10'd0;
+            phys_y_candidate <= 12'sd0;
+            phys_vy_candidate <= 6'sd0;
+            phys_blocked_q <= 1'b0;
+            phys_collision_skip_q <= 1'b0;
+            phys_probe_addr0_q <= 12'd0;
+            phys_probe_addr1_q <= 12'd0;
+            phys_probe_oob0_q <= 1'b0;
+            phys_probe_oob1_q <= 1'b0;
+            status_gate_open_q <= 1'b1;
+            status_fire_all_gems_q <= 1'b0;
+            status_water_all_gems_q <= 1'b0;
+            gate_open_eval_q <= 1'b1;
+            fire_grounded_eval_q <= 1'b0;
+            water_grounded_eval_q <= 1'b0;
+            level_complete_eval_q <= 1'b0;
+            level_failed_eval_q <= 1'b0;
+            fire_status_addr0_q <= 12'd0;
+            fire_status_addr1_q <= 12'd0;
+            fire_status_addr2_q <= 12'd0;
+            fire_status_addr3_q <= 12'd0;
+            water_status_addr0_q <= 12'd0;
+            water_status_addr1_q <= 12'd0;
+            water_status_addr2_q <= 12'd0;
+            water_status_addr3_q <= 12'd0;
+            fire_ground_addr0_q <= 12'd0;
+            fire_ground_addr1_q <= 12'd0;
+            water_ground_addr0_q <= 12'd0;
+            water_ground_addr1_q <= 12'd0;
             btn_u_sync0 <= 1'b0;
             btn_u_sync1 <= 1'b0;
             btn_d_sync0 <= 1'b0;
@@ -883,8 +1169,23 @@ module game_slot4_top (
             water_gems <= 4'b0000;
             button_mask <= 2'b00;
             frame_counter <= 24'd0;
+            selected_video_q <= 1'b0;
+            display_active_video_q <= 1'b0;
+            level_video_q <= 2'd0;
+            won_video_q <= 1'b0;
+            fire_x_video_q <= slot4_fire_start_x(2'd0);
+            fire_y_video_q <= slot4_fire_start_y(2'd0);
+            water_x_video_q <= slot4_water_start_x(2'd0);
+            water_y_video_q <= slot4_water_start_y(2'd0);
+            fire_gems_video_q <= 4'b0000;
+            water_gems_video_q <= 4'b0000;
+            gate_open_video_q <= 1'b1;
+            frame_counter_video_q <= 24'd0;
         end else begin
-            frame_tick_q <= frame_tick;
+            frame_tick_q <= frame_tick && (phys_state == PHYS_IDLE);
+            status_eval_q <= selected && frame_tick_q;
+            status_apply_q <= status_eval_q;
+            frame_step_q <= status_apply_q;
             btn_u_sync0 <= btn_u;
             btn_u_sync1 <= btn_u_sync0;
             btn_d_sync0 <= btn_d;
@@ -902,6 +1203,21 @@ module game_slot4_top (
             sw2_sync0 <= sw[2];
             sw2_sync1 <= sw2_sync0;
 
+            if (pixel_tick) begin
+                selected_video_q <= selected;
+                display_active_video_q <= display_active;
+                level_video_q <= level;
+                won_video_q <= won;
+                fire_x_video_q <= fire_x;
+                fire_y_video_q <= fire_y;
+                water_x_video_q <= water_x;
+                water_y_video_q <= water_y;
+                fire_gems_video_q <= fire_gems;
+                water_gems_video_q <= water_gems;
+                gate_open_video_q <= gate_open;
+                frame_counter_video_q <= frame_counter;
+            end
+
             if (frame_tick) begin
                 btn_u_q <= btn_u_sync1;
                 btn_d_q <= btn_d_sync1;
@@ -918,7 +1234,22 @@ module game_slot4_top (
                 sw0_q <= sw0_sync1;
                 sw1_q <= sw1_sync1;
                 sw2_q <= sw2_sync1;
-                gate_open_q <= gate_open_now;
+            end
+
+            if (frame_tick_q) begin
+                slot4_stage_status_probes(level, fire_x, fire_y, water_x, water_y);
+            end
+
+            if (status_eval_q) begin
+                gate_open_eval_q <= status_gate_open_q;
+                fire_grounded_eval_q <= fire_grounded_eval_now;
+                water_grounded_eval_q <= water_grounded_eval_now;
+                level_complete_eval_q <= level_complete_eval_now;
+                level_failed_eval_q <= level_failed_eval_now;
+            end
+
+            if (status_apply_q) begin
+                gate_open_q <= gate_open_eval_q;
                 fire_grounded_q <= fire_grounded_now;
                 water_grounded_q <= water_grounded_now;
                 fire_pick_mask_q <= fire_pick_mask_now;
@@ -928,142 +1259,167 @@ module game_slot4_top (
                 level_failed_q <= level_failed_now;
             end
 
-            if (selected && frame_tick_q) begin
-                frame_counter <= frame_counter + 24'd1;
+            case (phys_state)
+                PHYS_IDLE: begin
+                    if (selected && frame_step_q) begin
+                        frame_counter <= frame_counter + 24'd1;
 
-                if (btn_c_q) begin
-                    fire_x <= slot4_fire_start_x(level);
-                    fire_y <= slot4_fire_start_y(level);
-                    water_x <= slot4_water_start_x(level);
-                    water_y <= slot4_water_start_y(level);
-                    fire_vy <= 6'sd0;
-                    water_vy <= 6'sd0;
-                    fire_gems <= 4'b0000;
-                    water_gems <= 4'b0000;
-                    button_mask <= 2'b00;
-                    won <= 1'b0;
-                end else if (!won) begin
-                    fire_gems <= fire_gems | fire_pick_mask_q;
-                    water_gems <= water_gems | water_pick_mask_q;
-                    button_mask <= button_mask | button_pick_mask_q;
-
-                    if (level_failed_q) begin
-                        fire_x <= slot4_fire_start_x(level);
-                        fire_y <= slot4_fire_start_y(level);
-                        water_x <= slot4_water_start_x(level);
-                        water_y <= slot4_water_start_y(level);
-                        fire_vy <= 6'sd0;
-                        water_vy <= 6'sd0;
-                        fire_gems <= 4'b0000;
-                        water_gems <= 4'b0000;
-                        button_mask <= 2'b00;
-                    end else if (level_complete_q) begin
-                        if (level == 2'd2) begin
-                            won <= 1'b1;
-                        end else begin
-                            next_level = level + 2'd1;
-                            level <= next_level;
-                            fire_x <= slot4_fire_start_x(next_level);
-                            fire_y <= slot4_fire_start_y(next_level);
-                            water_x <= slot4_water_start_x(next_level);
-                            water_y <= slot4_water_start_y(next_level);
+                        if (btn_c_q) begin
+                            fire_x <= slot4_fire_start_x(level);
+                            fire_y <= slot4_fire_start_y(level);
+                            water_x <= slot4_water_start_x(level);
+                            water_y <= slot4_water_start_y(level);
                             fire_vy <= 6'sd0;
                             water_vy <= 6'sd0;
                             fire_gems <= 4'b0000;
                             water_gems <= 4'b0000;
                             button_mask <= 2'b00;
-                        end
-                    end else begin
-                        fire_x_calc = fire_x;
-                        if (fire_left_cmd && !fire_right_cmd) begin
-                            fire_x_calc = (fire_x > MOVE_STEP) ? fire_x - MOVE_STEP : 10'd1;
-                        end else if (fire_right_cmd && !fire_left_cmd) begin
-                            fire_x_calc = (fire_x < SCREEN_W - PLAYER_W - MOVE_STEP) ?
-                                          fire_x + MOVE_STEP :
-                                          SCREEN_W - PLAYER_W - 1;
-                        end
+                            won <= 1'b0;
+                        end else if (!won) begin
+                            fire_gems <= fire_gems | fire_pick_mask_q;
+                            water_gems <= water_gems | water_pick_mask_q;
+                            button_mask <= button_mask | button_pick_mask_q;
 
-                        if (fire_x_calc > fire_x) begin
-                            if (!slot4_player_solid_x(level, fire_x_calc, fire_y, gate_open_q, 1'b1))
-                                fire_x <= fire_x_calc;
-                            else
-                                fire_x_calc = fire_x;
-                        end else if (fire_x_calc < fire_x) begin
-                            if (!slot4_player_solid_x(level, fire_x_calc, fire_y, gate_open_q, 1'b0))
-                                fire_x <= fire_x_calc;
-                            else
-                                fire_x_calc = fire_x;
-                        end
-
-                        water_x_calc = water_x;
-                        if (water_left_cmd && !water_right_cmd) begin
-                            water_x_calc = (water_x > MOVE_STEP) ? water_x - MOVE_STEP : 10'd1;
-                        end else if (water_right_cmd && !water_left_cmd) begin
-                            water_x_calc = (water_x < SCREEN_W - PLAYER_W - MOVE_STEP) ?
-                                           water_x + MOVE_STEP :
-                                           SCREEN_W - PLAYER_W - 1;
-                        end
-
-                        if (water_x_calc > water_x) begin
-                            if (!slot4_player_solid_x(level, water_x_calc, water_y, gate_open_q, 1'b1))
-                                water_x <= water_x_calc;
-                            else
-                                water_x_calc = water_x;
-                        end else if (water_x_calc < water_x) begin
-                            if (!slot4_player_solid_x(level, water_x_calc, water_y, gate_open_q, 1'b0))
-                                water_x <= water_x_calc;
-                            else
-                                water_x_calc = water_x;
-                        end
-
-                        fire_vy_calc = fire_vy;
-                        if (fire_jump_cmd && fire_grounded_q) begin
-                            fire_vy_calc = JUMP_VEL;
-                        end else if (fire_vy < MAX_FALL) begin
-                            fire_vy_calc = fire_vy + GRAVITY;
-                        end
-
-                        fire_y_calc = $signed({2'b00, fire_y}) + {{6{fire_vy_calc[5]}}, fire_vy_calc};
-                        if (fire_y_calc < 12'sd1) begin
-                            fire_y <= 10'd1;
-                            fire_vy <= 6'sd0;
-                        end else if (fire_y_calc > SCREEN_H - PLAYER_H - 1) begin
-                            fire_y <= SCREEN_H - PLAYER_H - 1;
-                            fire_vy <= 6'sd0;
-                        end else if (!slot4_player_solid_y(level, fire_x_calc, fire_y_calc[9:0], gate_open_q,
-                                                           (fire_vy_calc > 6'sd0))) begin
-                            fire_y <= fire_y_calc[9:0];
-                            fire_vy <= fire_vy_calc;
-                        end else begin
-                            fire_vy <= 6'sd0;
-                        end
-
-                        water_vy_calc = water_vy;
-                        if (water_jump_cmd && water_grounded_q) begin
-                            water_vy_calc = JUMP_VEL;
-                        end else if (water_vy < MAX_FALL) begin
-                            water_vy_calc = water_vy + GRAVITY;
-                            if (water_down_cmd && water_vy_calc < MAX_FALL)
-                                water_vy_calc = water_vy_calc + GRAVITY;
-                        end
-
-                        water_y_calc = $signed({2'b00, water_y}) + {{6{water_vy_calc[5]}}, water_vy_calc};
-                        if (water_y_calc < 12'sd1) begin
-                            water_y <= 10'd1;
-                            water_vy <= 6'sd0;
-                        end else if (water_y_calc > SCREEN_H - PLAYER_H - 1) begin
-                            water_y <= SCREEN_H - PLAYER_H - 1;
-                            water_vy <= 6'sd0;
-                        end else if (!slot4_player_solid_y(level, water_x_calc, water_y_calc[9:0], gate_open_q,
-                                                           (water_vy_calc > 6'sd0))) begin
-                            water_y <= water_y_calc[9:0];
-                            water_vy <= water_vy_calc;
-                        end else begin
-                            water_vy <= 6'sd0;
+                            if (level_failed_q) begin
+                                fire_x <= slot4_fire_start_x(level);
+                                fire_y <= slot4_fire_start_y(level);
+                                water_x <= slot4_water_start_x(level);
+                                water_y <= slot4_water_start_y(level);
+                                fire_vy <= 6'sd0;
+                                water_vy <= 6'sd0;
+                                fire_gems <= 4'b0000;
+                                water_gems <= 4'b0000;
+                                button_mask <= 2'b00;
+                            end else if (level_complete_q) begin
+                                if (level == 2'd2) begin
+                                    won <= 1'b1;
+                                end else begin
+                                    next_level = level + 2'd1;
+                                    level <= next_level;
+                                    fire_x <= slot4_fire_start_x(next_level);
+                                    fire_y <= slot4_fire_start_y(next_level);
+                                    water_x <= slot4_water_start_x(next_level);
+                                    water_y <= slot4_water_start_y(next_level);
+                                    fire_vy <= 6'sd0;
+                                    water_vy <= 6'sd0;
+                                    fire_gems <= 4'b0000;
+                                    water_gems <= 4'b0000;
+                                    button_mask <= 2'b00;
+                                end
+                            end else begin
+                                phys_x_candidate <= slot4_next_x_candidate(fire_x, fire_left_cmd, fire_right_cmd);
+                                phys_state <= PHYS_FIRE_X_TEST;
+                            end
                         end
                     end
                 end
-            end
+
+                PHYS_FIRE_X_TEST: begin
+                    phys_collision_skip_q <= (phys_x_candidate == fire_x);
+                    slot4_stage_solid_x_probe(level, phys_x_candidate, fire_y, phys_x_candidate > fire_x);
+                    phys_state <= PHYS_FIRE_X_EVAL;
+                end
+
+                PHYS_FIRE_X_EVAL: begin
+                    phys_blocked_q <= phys_collision_skip_q ? 1'b0 : phys_probe_solid;
+                    phys_state <= PHYS_FIRE_X_APPLY;
+                end
+
+                PHYS_FIRE_X_APPLY: begin
+                    if (!phys_blocked_q)
+                        fire_x <= phys_x_candidate;
+                    phys_x_candidate <= slot4_next_x_candidate(water_x, water_left_cmd, water_right_cmd);
+                    phys_state <= PHYS_WATER_X_TEST;
+                end
+
+                PHYS_WATER_X_TEST: begin
+                    phys_collision_skip_q <= (phys_x_candidate == water_x);
+                    slot4_stage_solid_x_probe(level, phys_x_candidate, water_y, phys_x_candidate > water_x);
+                    phys_state <= PHYS_WATER_X_EVAL;
+                end
+
+                PHYS_WATER_X_EVAL: begin
+                    phys_blocked_q <= phys_collision_skip_q ? 1'b0 : phys_probe_solid;
+                    phys_state <= PHYS_WATER_X_APPLY;
+                end
+
+                PHYS_WATER_X_APPLY: begin
+                    if (!phys_blocked_q)
+                        water_x <= phys_x_candidate;
+                    phys_vy_candidate <= slot4_next_fire_vy(fire_vy, fire_jump_cmd, fire_grounded_q);
+                    phys_y_candidate <= slot4_next_y_calc(fire_y,
+                                                          slot4_next_fire_vy(fire_vy, fire_jump_cmd, fire_grounded_q));
+                    phys_state <= PHYS_FIRE_Y_TEST;
+                end
+
+                PHYS_FIRE_Y_TEST: begin
+                    phys_collision_skip_q <= (phys_y_candidate < 12'sd1) ||
+                                             (phys_y_candidate > SCREEN_H - PLAYER_H - 1);
+                    slot4_stage_solid_y_probe(level, fire_x, phys_y_candidate[9:0],
+                                              phys_vy_candidate > 6'sd0);
+                    phys_state <= PHYS_FIRE_Y_EVAL;
+                end
+
+                PHYS_FIRE_Y_EVAL: begin
+                    phys_blocked_q <= phys_collision_skip_q ? 1'b0 : phys_probe_solid;
+                    phys_state <= PHYS_FIRE_Y_APPLY;
+                end
+
+                PHYS_FIRE_Y_APPLY: begin
+                    if (phys_y_candidate < 12'sd1) begin
+                        fire_y <= 10'd1;
+                        fire_vy <= 6'sd0;
+                    end else if (phys_y_candidate > SCREEN_H - PLAYER_H - 1) begin
+                        fire_y <= SCREEN_H - PLAYER_H - 1;
+                        fire_vy <= 6'sd0;
+                    end else if (!phys_blocked_q) begin
+                        fire_y <= phys_y_candidate[9:0];
+                        fire_vy <= phys_vy_candidate;
+                    end else begin
+                        fire_vy <= 6'sd0;
+                    end
+
+                    phys_vy_candidate <= slot4_next_water_vy(water_vy, water_jump_cmd, water_grounded_q,
+                                                             water_down_cmd);
+                    phys_y_candidate <= slot4_next_y_calc(water_y,
+                                                          slot4_next_water_vy(water_vy, water_jump_cmd,
+                                                                              water_grounded_q, water_down_cmd));
+                    phys_state <= PHYS_WATER_Y_TEST;
+                end
+
+                PHYS_WATER_Y_TEST: begin
+                    phys_collision_skip_q <= (phys_y_candidate < 12'sd1) ||
+                                             (phys_y_candidate > SCREEN_H - PLAYER_H - 1);
+                    slot4_stage_solid_y_probe(level, water_x, phys_y_candidate[9:0],
+                                              phys_vy_candidate > 6'sd0);
+                    phys_state <= PHYS_WATER_Y_EVAL;
+                end
+
+                PHYS_WATER_Y_EVAL: begin
+                    phys_blocked_q <= phys_collision_skip_q ? 1'b0 : phys_probe_solid;
+                    phys_state <= PHYS_WATER_Y_APPLY;
+                end
+
+                PHYS_WATER_Y_APPLY: begin
+                    if (phys_y_candidate < 12'sd1) begin
+                        water_y <= 10'd1;
+                        water_vy <= 6'sd0;
+                    end else if (phys_y_candidate > SCREEN_H - PLAYER_H - 1) begin
+                        water_y <= SCREEN_H - PLAYER_H - 1;
+                        water_vy <= 6'sd0;
+                    end else if (!phys_blocked_q) begin
+                        water_y <= phys_y_candidate[9:0];
+                        water_vy <= phys_vy_candidate;
+                    end else begin
+                        water_vy <= 6'sd0;
+                    end
+                    phys_state <= PHYS_IDLE;
+                end
+
+                default: begin
+                    phys_state <= PHYS_IDLE;
+                end
+            endcase
         end
     end
 
@@ -1072,39 +1428,39 @@ module game_slot4_top (
         cell_y = slot4_pixel_to_cell_y(pixel_y);
         local_x = slot4_cell_local(pixel_x, cell_x);
         local_y = slot4_cell_local(pixel_y, cell_y);
-        draw_tile = slot4_tile_rom[slot4_tile_addr(level, cell_x, cell_y)];
+        draw_tile = slot4_tile_rom[slot4_tile_addr(level_video_q, cell_x, cell_y)];
 
-        if ((draw_tile == TILE_FIRE_GEM) && slot4_fire_gem_collected(level, cell_x, cell_y, fire_gems))
+        if ((draw_tile == TILE_FIRE_GEM) && slot4_fire_gem_collected(level_video_q, cell_x, cell_y, fire_gems_video_q))
             draw_tile = TILE_EMPTY;
-        else if ((draw_tile == TILE_WATER_GEM) && slot4_water_gem_collected(level, cell_x, cell_y, water_gems))
+        else if ((draw_tile == TILE_WATER_GEM) && slot4_water_gem_collected(level_video_q, cell_x, cell_y, water_gems_video_q))
             draw_tile = TILE_EMPTY;
-        else if ((draw_tile == TILE_GATE) && gate_open)
+        else if ((draw_tile == TILE_GATE) && gate_open_video_q)
             draw_tile = TILE_EMPTY;
 
-        if (!display_active || !selected) begin
+        if (!display_active_video_q || !selected_video_q) begin
             render_r = 4'h0;
             render_g = 4'h0;
             render_b = 4'h0;
-        end else if (won) begin
+        end else if (won_video_q) begin
             render_r = pixel_x[5] ^ pixel_y[4] ? 4'hF : 4'h2;
-            render_g = pixel_x[6] ^ frame_counter[4] ? 4'hD : 4'h4;
-            render_b = pixel_y[5] ^ frame_counter[3] ? 4'h7 : 4'hF;
+            render_g = pixel_x[6] ^ frame_counter_video_q[4] ? 4'hD : 4'h4;
+            render_b = pixel_y[5] ^ frame_counter_video_q[3] ? 4'h7 : 4'hF;
         end else if (fire_eye || water_eye) begin
             render_r = 4'h1;
             render_g = 4'h1;
             render_b = 4'h1;
         end else if (fire_pixel) begin
-            if (pixel_y < fire_y + 10'd4) begin
+            if (pixel_y < fire_y_video_q + 10'd4) begin
                 render_r = 4'hF;
                 render_g = 4'hC;
                 render_b = 4'h2;
             end else begin
                 render_r = 4'hE;
-                render_g = 4'h3 + frame_counter[3];
+                render_g = 4'h3 + frame_counter_video_q[3];
                 render_b = 4'h1;
             end
         end else if (water_pixel) begin
-            if (pixel_y < water_y + 10'd4) begin
+            if (pixel_y < water_y_video_q + 10'd4) begin
                 render_r = 4'h9;
                 render_g = 4'hF;
                 render_b = 4'hF;
@@ -1137,24 +1493,24 @@ module game_slot4_top (
                 end
                 TILE_FIRE: begin
                     render_r = 4'hF;
-                    render_g = (local_y[2] ^ frame_counter[3]) ? 4'h6 : 4'h2;
+                    render_g = (local_y[2] ^ frame_counter_video_q[3]) ? 4'h6 : 4'h2;
                     render_b = 4'h0;
                 end
                 TILE_WATER: begin
                     render_r = 4'h0;
-                    render_g = (local_x[2] ^ frame_counter[3]) ? 4'h9 : 4'hC;
+                    render_g = (local_x[2] ^ frame_counter_video_q[3]) ? 4'h9 : 4'hC;
                     render_b = 4'hF;
                 end
                 TILE_POISON: begin
                     render_r = 4'h3;
-                    render_g = (local_x[2] ^ local_y[2] ^ frame_counter[3]) ? 4'hF : 4'h9;
+                    render_g = (local_x[2] ^ local_y[2] ^ frame_counter_video_q[3]) ? 4'hF : 4'h9;
                     render_b = 4'h2;
                 end
                 TILE_FIRE_GEM: begin
                     if ((local_x >= 5'd5) && (local_x <= 5'd14) &&
                         (local_y >= 5'd4) && (local_y <= 5'd15)) begin
                         render_r = 4'hF;
-                        render_g = 4'h6 + frame_counter[3];
+                        render_g = 4'h6 + frame_counter_video_q[3];
                         render_b = 4'h2;
                     end
                 end
@@ -1191,8 +1547,8 @@ module game_slot4_top (
                 TILE_BUTTON: begin
                     if ((local_y >= 5'd12) && (local_y <= 5'd16) &&
                         (local_x >= 5'd4) && (local_x <= 5'd15)) begin
-                        render_r = gate_open ? 4'h5 : 4'hF;
-                        render_g = gate_open ? 4'hF : 4'hD;
+                        render_r = gate_open_video_q ? 4'h5 : 4'hF;
+                        render_g = gate_open_video_q ? 4'hF : 4'hD;
                         render_b = 4'h2;
                     end
                 end
