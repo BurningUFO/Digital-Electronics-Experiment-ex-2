@@ -1,3 +1,9 @@
+// Tank War game logic and renderer for slot 1.
+//
+// This module consumes the console-provided VGA coordinate stream and PS/2 byte
+// events.  It owns Tank War screens, two-player input state, movement/collision,
+// bullets, hit/life handling, map selection, sprite composition, seven-segment
+// output, LEDs, and buzzer patterns.
 module tank_top (
     input  wire       CLK100MHZ,
     input  wire       reset,
@@ -203,6 +209,7 @@ module tank_top (
     reg [10:0] p2_move_blocker_x;
     reg [9:0]  p2_move_blocker_y;
 
+    // Gameplay constants: spawn locations, directions, map IDs, and result IDs.
     localparam [5:0] P1_TILE_X = 6'd2;
     localparam [4:0] P1_TILE_Y = 5'd26;
     localparam [1:0] DIR_UP    = 2'd0;
@@ -1784,6 +1791,7 @@ module keyboard_dual_mapper (
 
     reg break_pending;
     reg extend_pending;
+    reg [18:0] prefix_timeout_q;
 
     localparam [7:0] SCAN_F0    = 8'hF0;
     localparam [7:0] SCAN_E0    = 8'hE0;
@@ -1797,6 +1805,7 @@ module keyboard_dual_mapper (
     localparam [7:0] SCAN_DOWN   = 8'h72;
     localparam [7:0] SCAN_LEFT   = 8'h6B;
     localparam [7:0] SCAN_RIGHT  = 8'h74;
+    localparam [18:0] PREFIX_TIMEOUT_CYCLES = 19'd500000;
 
     always @(posedge clk) begin
         if (reset) begin
@@ -1812,7 +1821,9 @@ module keyboard_dual_mapper (
             p2_fire <= 1'b0;
             break_pending <= 1'b0;
             extend_pending <= 1'b0;
+            prefix_timeout_q <= 19'd0;
         end else if (byte_ready) begin
+            prefix_timeout_q <= 19'd0;
             if (byte_data == SCAN_F0) begin
                 break_pending <= 1'b1;
             end else if (byte_data == SCAN_E0) begin
@@ -1846,6 +1857,16 @@ module keyboard_dual_mapper (
                 break_pending <= 1'b0;
                 extend_pending <= 1'b0;
             end
+        end else if (break_pending || extend_pending) begin
+            if (prefix_timeout_q == PREFIX_TIMEOUT_CYCLES) begin
+                break_pending <= 1'b0;
+                extend_pending <= 1'b0;
+                prefix_timeout_q <= 19'd0;
+            end else begin
+                prefix_timeout_q <= prefix_timeout_q + 19'd1;
+            end
+        end else begin
+            prefix_timeout_q <= 19'd0;
         end
     end
 

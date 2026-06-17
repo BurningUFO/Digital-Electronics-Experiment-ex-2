@@ -1,3 +1,8 @@
+// Entity simulation for slot 3.
+//
+// Owns positions and simple AI for Smith enemies, NPCs, the red distraction
+// object, and Trinity.  Combat and quest modules send masks/events into this
+// module, and the renderer reads flattened coordinate outputs.
 module slot3_entities (
     input  wire        clk,
     input  wire        reset,
@@ -57,6 +62,8 @@ module slot3_entities (
     reg [8:0] npc_y [0:7];
     reg [7:0] chase_reg;
 
+    // Flatten internal arrays to Verilog-2001-friendly ports used by other
+    // modules and by Verilator/Vivado.
     assign smith_x0=smith_x[0]; assign smith_x1=smith_x[1]; assign smith_x2=smith_x[2]; assign smith_x3=smith_x[3];
     assign smith_x4=smith_x[4]; assign smith_x5=smith_x[5]; assign smith_x6=smith_x[6]; assign smith_x7=smith_x[7];
     assign smith_y0=smith_y[0]; assign smith_y1=smith_y[1]; assign smith_y2=smith_y[2]; assign smith_y3=smith_y[3];
@@ -71,6 +78,7 @@ module slot3_entities (
     assign npc_y4=npc_y[4]; assign npc_y5=npc_y[5]; assign npc_y6=npc_y[6]; assign npc_y7=npc_y[7];
     assign smith_chasing = chase_reg;
 
+    // Count active Smiths to cap replication.
     function [3:0] smith_count;
         input [7:0] active_mask;
         begin
@@ -105,6 +113,8 @@ module slot3_entities (
             trinity_y <= 9'd96;
             chase_reg <= 8'd0;
         end else if (start_level) begin
+            // Level start seeds actor positions and activates more Smiths as the
+            // chosen difficulty/level increases.
             smith_x[0] <= 10'd520; smith_y[0] <= 9'd320;
             smith_x[1] <= 10'd400; smith_y[1] <= 9'd112;
             smith_x[2] <= 10'd528; smith_y[2] <= 9'd208;
@@ -168,6 +178,7 @@ module slot3_entities (
                 if (npc_rescue_mask[i]) npc_alive[i] <= 1'b0;
             end
 
+            // Replication turns a touched NPC into a new Smith if there is room.
             if (replicate_en && smith_count(smith_active) < MAX_SMITH && !smith_active[3]) begin
                 smith_x[3] <= npc_x[replicate_npc_idx];
                 smith_y[3] <= npc_y[replicate_npc_idx];
@@ -186,6 +197,8 @@ module slot3_entities (
             end
 
             if (smith_move_tick && playing) begin
+                // Smiths chase Neo when alerted, otherwise wander using LFSR
+                // bits.  Bullet time slows this tick in the wire above.
                 for (i = 0; i < 8; i = i + 1) begin
                     if (smith_active[i] && smith_stun[i] == 6'd0) begin
                         if ((((smith_x[i] > neo_x) ? (smith_x[i] - neo_x) : (neo_x - smith_x[i])) +
@@ -217,6 +230,7 @@ module slot3_entities (
             end
 
             if (npc_move_tick && playing) begin
+                // NPCs use simple horizontal wandering.
                 for (i = 0; i < 2; i = i + 1) begin
                     if (npc_alive[i]) begin
                         if (lfsr[i + 16]) npc_x[i] <= (npc_x[i] < WORLD_W - NPC_W - 10'd2) ? npc_x[i] + 10'd1 : npc_x[i] - 10'd1;
@@ -226,6 +240,7 @@ module slot3_entities (
             end
 
             if (red_move_tick && playing) begin
+                // Red distraction object moves slowly and can trigger attract.
                 if (lfsr[0]) red_x <= (red_x < WORLD_W - 10'd18) ? red_x + 10'd1 : red_x - 10'd1;
                 else         red_x <= (red_x > 10'd2) ? red_x - 10'd1 : red_x + 10'd1;
                 if (lfsr[1]) red_y <= (red_y < WORLD_H - 9'd22) ? red_y + 9'd1 : red_y - 9'd1;

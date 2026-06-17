@@ -1,3 +1,9 @@
+// Player state, movement, bullet-time ability, and inventory for slot 3.
+//
+// Movement is a two-step protocol:
+// 1. calculate candidate try_x/try_y from held input on a frame boundary;
+// 2. wait one cycle for slot3_map walkability, then commit or reject.
+// This breaks the player -> map -> player feedback path for timing.
 module slot3_player (
     input  wire        clk,
     input  wire        reset,
@@ -56,6 +62,8 @@ module slot3_player (
     reg move_wait;
     reg [1:0] move_dir_pending;
 
+    // Candidate movement is combinational, but final position is registered only
+    // after the map reports whether try_x/try_y is walkable.
     always @(*) begin
         candidate_x = neo_x;
         candidate_y = neo_y;
@@ -107,6 +115,8 @@ module slot3_player (
             input_right_q <= input_right;
 
             if (move_pending) begin
+                // move_wait gives the map one clock to observe try_x/try_y and
+                // return walkable before the player commits the position.
                 if (move_wait) begin
                     move_wait <= 1'b0;
                 end else begin
@@ -139,11 +149,14 @@ module slot3_player (
                 end
             end
 
+            // Bullet time is a timed ability with a cooldown.  Timers count in
+            // frames so the duration matches visual gameplay speed.
             if (space_pulse && has_bullet_time && bt_timer == 9'd0 && bt_cooldown == 9'd0) begin
                 bt_timer <= BT_TIME;
                 bt_cooldown <= BT_CD;
             end
 
+            // Inventory updates are saturating: resource counts never wrap.
             if (give_bullet_time) has_bullet_time <= 1'b1;
             if (consume_ammo && ammo != 6'd0)
                 ammo <= ammo - 6'd1;

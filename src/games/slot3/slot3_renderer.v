@@ -1,3 +1,9 @@
+// Pixel renderer for slot 3.
+//
+// The renderer composes map tiles, Neo, Smiths, NPCs, quest objects, bullets,
+// bomb/EMP effects, pickups, HUD digits, and text overlays.  Inputs are staged
+// by game_slot3_top on pixel_tick so this block acts as the video combinational
+// layer.
 module slot3_renderer (
     input  wire        clk,
     input  wire [9:0]  pixel_x,
@@ -69,6 +75,7 @@ module slot3_renderer (
     output reg  [3:0]  vga_b
 );
 
+    // State and tile encodings mirrored from the gameplay modules for rendering.
     localparam [2:0] ST_START = 3'd0;
     localparam [2:0] ST_PLAY  = 3'd1;
     localparam [2:0] ST_LOAD  = 3'd2;
@@ -80,6 +87,7 @@ module slot3_renderer (
     localparam [2:0] TILE_BUILDING = 3'd3;
     localparam [2:0] TILE_TREE     = 3'd4;
 
+    // Local arrays make repeated object hit tests and draw loops compact.
     wire [9:0] smith_x [0:7];
     wire [8:0] smith_y [0:7];
     wire [5:0] smith_stun [0:7];
@@ -115,6 +123,7 @@ module slot3_renderer (
 
     reg [9:0] compass_target_x;
     reg [8:0] compass_target_y;
+    // Point the small HUD compass at the current quest target.
     always @(*) begin
         case (quest_phase)
             2'd0: begin compass_target_x = trinity_x; compass_target_y = trinity_y; end
@@ -138,6 +147,7 @@ module slot3_renderer (
         else arrow_dir = 3'd7;
     end
 
+    // Small HUD/compass region near the top-right of the screen.
     wire compass_region = display_active && (state == ST_PLAY) &&
                           (pixel_x >= 10'd600) && (pixel_x < 10'd616) &&
                           (pixel_y >= 10'd12) && (pixel_y < 10'd28);
@@ -164,6 +174,7 @@ module slot3_renderer (
     wire play_pixel = display_active && selected && (state == ST_PLAY);
     wire world_pixel = play_pixel && (pixel_y < 10'd456);
     integer i;
+    // Object hit tests for the current pixel.
     always @(*) begin
         smith_on = 1'b0;
         smith_lx = 4'd0;
@@ -256,6 +267,8 @@ module slot3_renderer (
                     pixel_y >= phone_y && pixel_y < phone_y + 9'd36;
     wire hud_on = play_pixel && (pixel_y >= 10'd456);
 
+    // Tile palette packed as {R,G,B}.  The local pixel bits add a lightweight
+    // pattern so large tile areas do not look flat.
     function [11:0] tile_color;
         input [2:0] tile;
         input [4:0] lx;
@@ -271,6 +284,8 @@ module slot3_renderer (
         end
     endfunction
 
+    // Shared 16x20 actor drawing primitive used for Neo, Smiths, NPCs, Trinity,
+    // and the red distraction object.
     task draw_humanoid;
         input [3:0] lx;
         input [4:0] ly;
@@ -294,6 +309,8 @@ module slot3_renderer (
 
     wire [11:0] base_tile_color = tile_color(render_tile, pixel_x[4:0], pixel_y[4:0]);
 
+    // Main layer compositor.  Later branches intentionally override lower
+    // priority background and map layers.
     always @(*) begin
         vga_r = 4'h0;
         vga_g = 4'h0;
@@ -405,6 +422,7 @@ module slot3_renderer (
         end
     end
 
+    // Seven-segment style HUD digit renderer.
     function hud_digit_pixel;
         input [3:0] digit;
         input [3:0] col;

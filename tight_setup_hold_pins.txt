@@ -1,9 +1,8 @@
-+====================+===================+=====================================================+
-| Launch Setup Clock | Launch Hold Clock | Pin                                                 |
-+====================+===================+=====================================================+
-| CLK100MHZ          | CLK100MHZ         | u_game_slot2_top/u_core/ghost_y_reg_reg[5]/D        |
-| CLK100MHZ          | CLK100MHZ         | u_game_slot2_top/u_core/ghost_probe_y_reg[4]/D      |
-| CLK100MHZ          | CLK100MHZ         | u_game_slot1_top/u_tank_top/p2_hit_event_q_reg/D    |
-| CLK100MHZ          | CLK100MHZ         | u_game_slot2_top/u_core/ghost_blocked_q_reg/D       |
-| CLK100MHZ          | CLK100MHZ         | u_game_slot3_top/u_entities/smith_alert_reg[1][3]/D |
-+--------------------+-------------------+-----------------------------------------------------+
++====================+===================+================================================+
+| Launch Setup Clock | Launch Hold Clock | Pin                                            |
++====================+===================+================================================+
+| CLK100MHZ          | CLK100MHZ         | u_game_slot2_top/u_core/ghost_busy_reg/D       |
+| CLK100MHZ          | CLK100MHZ         | u_game_slot2_top/u_core/ghost_probe_y_reg[0]/D |
+| CLK100MHZ          | CLK100MHZ         | u_game_slot2_top/u_core/ghost_blocked_q_reg/D  |
+| CLK100MHZ          | CLK100MHZ         | u_game_slot2_top/u_core/ghost_y_reg_reg[0]/D   |
++--------------------+-------------------+------------------------------------------------+

@@ -1,3 +1,9 @@
+// Slot 2 top-level: Tetris-style falling-block game.
+//
+// This module wires together the input mapper, gravity tick generator, gameplay
+// core, renderer, seven-segment display, LEDs, and buzzer.  The visible game
+// state is staged on pixel_tick before reaching the renderer so the long pixel
+// combinational path can use the same 4-cycle VGA timing exception as RGB.
 module game_slot2_top (
     input  wire        clk,
     input  wire        reset,
@@ -33,7 +39,8 @@ module game_slot2_top (
     output wire        buzzer
 );
 
-    // internal signals
+    // Internal gameplay state exported by slot2_game_core and consumed by the
+    // renderer/board outputs.
     wire        gravity_tick;
     wire        move_left, move_right, rotate_cw, soft_drop, hard_drop;
     wire [199:0] board;
@@ -63,7 +70,7 @@ module game_slot2_top (
     (* keep = "true" *) reg [3:0]   level_video_q;
     (* keep = "true" *) reg         game_over_video_q;
 
-    // sub-modules
+    // Gravity speed depends on current level and advances only once per frame.
     slot2_tick_gen u_tick (
         .clk(clk), .reset(reset),
         .frame_tick(frame_tick),
@@ -71,6 +78,7 @@ module game_slot2_top (
         .gravity_tick(gravity_tick)
     );
 
+    // Convert board buttons and PS/2 scan codes into one-cycle game commands.
     slot2_input u_input (
         .clk(clk), .reset(reset),
         .selected(selected),
@@ -84,6 +92,8 @@ module game_slot2_top (
         .soft_drop(soft_drop), .hard_drop(hard_drop)
     );
 
+    // Gameplay FSM: spawn, movement, collision, hard drop, lock, line clear,
+    // compaction, scoring, and game-over detection.
     slot2_game_core u_core (
         .clk(clk), .reset(reset),
         .selected(selected),
@@ -104,6 +114,8 @@ module game_slot2_top (
         .line_clear_count(line_clear_count)
     );
 
+    // Pixel renderer consumes only the staged video registers below.  This keeps
+    // gameplay state changes and pixel sampling separated by a clear boundary.
     slot2_renderer u_render (
         .clk(clk), .reset(reset),
         .selected(selected_video_q),
@@ -119,6 +131,8 @@ module game_slot2_top (
         .vga_r(render_r), .vga_g(render_g), .vga_b(render_b)
     );
 
+    // Video staging boundary.  These registers update only with pixel_tick and
+    // hold all renderer inputs steady for the following RGB calculation.
     always @(posedge clk) begin
         if (reset) begin
             selected_video_q <= 1'b0;
@@ -149,6 +163,7 @@ module game_slot2_top (
         end
     end
 
+    // Register RGB at the same pixel boundary used by the shared VGA generator.
     always @(posedge clk) begin
         if (reset) begin
             vga_r <= 4'h0;
@@ -162,6 +177,9 @@ module game_slot2_top (
     end
 
     // === 7-segment display ===
+    // Convert the binary score to decimal digits over multiple 100 MHz cycles.
+    // This is cheaper than a wide combinational divider and is fast enough for a
+    // human-readable display.
     reg [15:0] score_sample;
     reg [15:0] score_work;
     reg [2:0]  bcd_state;
@@ -299,6 +317,8 @@ module game_slot2_top (
     assign led = {1'b0, game_over, hd_led, 1'b0, game_over ? 4'hF : level, 8'd0};
 
     // === Buzzer ===
+    // Short tones acknowledge locks and line clears; a longer changing tone
+    // marks game over.  BUZZER is active-low on this board.
     reg [16:0] buzz_cnt;
     reg [11:0] buzz_dur;
     reg        buzz_active;

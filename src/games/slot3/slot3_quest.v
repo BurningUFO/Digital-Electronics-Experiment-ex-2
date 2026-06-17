@@ -1,3 +1,8 @@
+// Quest and pickup logic for slot 3.
+//
+// The quest sequence is Trinity -> terminal -> rescue NPCs -> reachable phone.
+// This module owns quest flags, pickup positions/types, and collision/touch
+// outputs used by the top-level and player inventory.
 module slot3_quest (
     input  wire        clk,
     input  wire        reset,
@@ -33,6 +38,7 @@ module slot3_quest (
     output wire        phone_reachable
 );
 
+    // Quest phase identifiers and pickup type encoding.
     localparam [1:0] QUEST_TRINITY  = 2'd0;
     localparam [1:0] QUEST_TERMINAL = 2'd1;
     localparam [1:0] QUEST_RESCUE   = 2'd2;
@@ -45,6 +51,7 @@ module slot3_quest (
     reg [8:0] pickup_y [0:7];
     reg [2:0] pickup_type [0:7];
 
+    // Flatten pickup arrays for Verilog-2001 style module ports.
     assign pickup_x0=pickup_x[0]; assign pickup_x1=pickup_x[1]; assign pickup_x2=pickup_x[2]; assign pickup_x3=pickup_x[3];
     assign pickup_x4=pickup_x[4]; assign pickup_x5=pickup_x[5]; assign pickup_x6=pickup_x[6]; assign pickup_x7=pickup_x[7];
     assign pickup_y0=pickup_y[0]; assign pickup_y1=pickup_y[1]; assign pickup_y2=pickup_y[2]; assign pickup_y3=pickup_y[3];
@@ -62,6 +69,7 @@ module slot3_quest (
     localparam [8:0] PHONE_H = 9'd36;
     localparam [9:0] PICKUP_S = 10'd14;
 
+    // Axis-aligned rectangle overlap helper for actor/object touch checks.
     function overlap;
         input [9:0] ax, bx, aw, bw;
         input [8:0] ay, by, ah, bh;
@@ -77,6 +85,8 @@ module slot3_quest (
     assign phone_reachable = trinity_found && terminal_hacked && (rescued >= rescue_goal);
 
     integer i;
+    // Touch mask for pickups.  The active mask is checked by the top-level when
+    // deciding which resource to grant.
     always @(*) begin
         for (i = 0; i < 8; i = i + 1) begin
             neo_touch_pickup[i] = pickup_active[i] &&
@@ -102,6 +112,7 @@ module slot3_quest (
                 pickup_type[i] <= 3'd0;
             end
         end else if (start_level) begin
+            // Reset quest targets and scatter pickups for the new level.
             quest_phase <= QUEST_TRINITY;
             trinity_found <= 1'b0;
             terminal_hacked <= 1'b0;
@@ -151,6 +162,7 @@ module slot3_quest (
             pickup_type[7] <= 3'd0;
             pickup_active <= 8'b00000111;
         end else if (playing) begin
+            // Quest phase advances only while actively playing.
             if (!trinity_found && neo_touch_trinity) begin
                 trinity_found <= 1'b1;
                 quest_phase <= QUEST_TERMINAL;

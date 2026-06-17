@@ -1,3 +1,8 @@
+// Small text renderer for slot 3 overlay messages.
+//
+// msg_id selects a fixed message from slot3_msg_lut; slot3_font_rom supplies a
+// compact 5x7 bitmap font.  The output is a single-pixel hit flag consumed by
+// slot3_renderer for color/layer decisions.
 module slot3_text (
     input  wire [9:0]  pixel_x,
     input  wire [9:0]  pixel_y,
@@ -16,6 +21,8 @@ module slot3_text (
     wire [4:0] row = (scale == 2'd2) ? ly[9:3] :
                      (scale == 2'd1) ? ly[9:2] : ly[9:1];
 
+    // div6_rom maps a scaled X coordinate to {character_position, glyph_column}
+    // without synthesizing a generic divider in the pixel path.
     (* rom_style = "distributed" *) reg [6:0] div6_rom [0:127];
     integer div_i;
     reg [3:0] div_q;
@@ -54,11 +61,14 @@ module slot3_text (
         .bits(font_bits)
     );
 
+    // Character index 31 is used as a blank/sentinel and never draws.
     assign hit = in_bounds && (cx < 3'd5) && font_bits[3'd4 - cx[2:0]] && (char_idx != 5'd31);
 
 endmodule
 
 
+// Fixed-message lookup table.  Each message exposes one 5-bit character index
+// per character position.
 module slot3_msg_lut (
     input  wire [4:0] msg_id,
     input  wire [3:0] char_pos,
@@ -255,6 +265,7 @@ module slot3_msg_lut (
 endmodule
 
 
+// 5x7 bitmap font ROM for the message character index set.
 module slot3_font_rom (
     input  wire [4:0] char_idx,
     input  wire [2:0] row,

@@ -1,3 +1,9 @@
+// Input mapper for the slot 2 falling-block game.
+//
+// It merges board buttons and PS/2 set-2 scan codes into gameplay commands:
+// left/right movement with delayed auto-shift, rotate, soft drop, and hard drop.
+// PS/2 F0/E0 prefixes are tracked locally so held/released keys become stable
+// key-state bits instead of raw scan-code pulses.
 module slot2_input (
     input  wire       clk,
     input  wire       reset,
@@ -17,11 +23,15 @@ module slot2_input (
     output reg        hard_drop
 );
 
+    // DAS = delayed auto-shift.  After an initial hold delay, left/right repeats
+    // every DAS_REPEAT frames while exactly one horizontal direction is held.
     localparam DAS_INIT  = 5'd10;
     localparam DAS_REPEAT = 5'd3;
+    localparam [18:0] PS2_PREFIX_TIMEOUT_CYCLES = 19'd500000;
 
     reg        ps2_break;
     reg        ps2_ext;
+    reg [18:0] ps2_prefix_timeout_q;
     reg        key_w;
     reg        key_a;
     reg        key_s;
@@ -48,6 +58,7 @@ module slot2_input (
         if (reset) begin
             ps2_break <= 1'b0;
             ps2_ext <= 1'b0;
+            ps2_prefix_timeout_q <= 19'd0;
             key_w <= 1'b0;
             key_a <= 1'b0;
             key_s <= 1'b0;
@@ -84,7 +95,10 @@ module slot2_input (
             hard_drop <= 1'b0;
 
             if (selected) begin
+                // Decode PS/2 make/break bytes into held key flags.  Arrow keys
+                // are accepted only after an E0 prefix; WASD/C work without it.
                 if (ps2_byte_ready) begin
+                    ps2_prefix_timeout_q <= 19'd0;
                     if (ps2_byte_data == 8'hF0) begin
                         ps2_break <= 1'b1;
                     end else if (ps2_byte_data == 8'hE0) begin
@@ -105,6 +119,16 @@ module slot2_input (
                         ps2_break <= 1'b0;
                         ps2_ext <= 1'b0;
                     end
+                end else if (ps2_break || ps2_ext) begin
+                    if (ps2_prefix_timeout_q == PS2_PREFIX_TIMEOUT_CYCLES) begin
+                        ps2_break <= 1'b0;
+                        ps2_ext <= 1'b0;
+                        ps2_prefix_timeout_q <= 19'd0;
+                    end else begin
+                        ps2_prefix_timeout_q <= ps2_prefix_timeout_q + 19'd1;
+                    end
+                end else begin
+                    ps2_prefix_timeout_q <= 19'd0;
                 end
 
                 btn_l_prev <= btn_l;
@@ -118,6 +142,8 @@ module slot2_input (
                 rotate_prev <= rotate_in;
                 hard_prev <= hard_in;
 
+                // Edge-triggered movement provides immediate response.  The DAS
+                // section below handles repeats after the first move.
                 if (left_in && !left_prev) begin
                     move_left <= 1'b1;
                     btn_l_held <= 1'b1;
@@ -150,6 +176,8 @@ module slot2_input (
                     hard_drop <= 1'b1;
                 end
 
+                // Horizontal auto-repeat is frame-based so game speed stays
+                // stable even though the system clock is 100 MHz.
                 if ((btn_l_held && !btn_r_held) || (!btn_l_held && btn_r_held)) begin
                     if (frame_tick) begin
                         if (!das_active) begin
@@ -178,6 +206,7 @@ module slot2_input (
             end else begin
                 ps2_break <= 1'b0;
                 ps2_ext <= 1'b0;
+                ps2_prefix_timeout_q <= 19'd0;
                 key_w <= 1'b0;
                 key_a <= 1'b0;
                 key_s <= 1'b0;

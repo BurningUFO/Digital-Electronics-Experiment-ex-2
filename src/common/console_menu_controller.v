@@ -1,3 +1,12 @@
+// Converts PS/2 scan-code bytes into console menu state.
+//
+// The controller treats key make events as commands:
+// - W / Up: move cursor up;
+// - S / Down: move cursor down;
+// - Enter / Space: launch the highlighted game;
+// - Esc: return from a game to the menu.
+//
+// F0 release prefixes are tracked so key releases do not trigger menu actions.
 module console_menu_controller (
     input  wire       clk,
     input  wire       reset,
@@ -19,9 +28,13 @@ module console_menu_controller (
     localparam [7:0] SCAN_UP    = 8'h75;
     localparam [7:0] SCAN_DOWN  = 8'h72;
     localparam [2:0] MENU_LAST_ITEM = 3'd3;
+    // If an F0/E0 prefix is seen without a following scan code, clear the prefix
+    // state so one bad byte cannot poison all later keyboard input.
+    localparam [18:0] PREFIX_TIMEOUT_CYCLES = 19'd500000;
 
     reg break_pending;
     reg extend_pending;
+    reg [18:0] prefix_timeout_q;
 
     wire is_up_key;
     wire is_down_key;
@@ -41,15 +54,19 @@ module console_menu_controller (
             launch_pulse <= 1'b0;
             break_pending <= 1'b0;
             extend_pending <= 1'b0;
+            prefix_timeout_q <= 19'd0;
         end else begin
             launch_pulse <= 1'b0;
 
             if (byte_ready) begin
+                prefix_timeout_q <= 19'd0;
                 if (byte_data == SCAN_F0) begin
                     break_pending <= 1'b1;
                 end else if (byte_data == SCAN_E0) begin
                     extend_pending <= 1'b1;
                 end else begin
+                    // Only make codes change menu state.  Release codes are
+                    // consumed by break_pending and then ignored.
                     if (!break_pending) begin
                         if (menu_active) begin
                             if (is_up_key) begin
@@ -70,6 +87,16 @@ module console_menu_controller (
                     break_pending <= 1'b0;
                     extend_pending <= 1'b0;
                 end
+            end else if (break_pending || extend_pending) begin
+                if (prefix_timeout_q == PREFIX_TIMEOUT_CYCLES) begin
+                    break_pending <= 1'b0;
+                    extend_pending <= 1'b0;
+                    prefix_timeout_q <= 19'd0;
+                end else begin
+                    prefix_timeout_q <= prefix_timeout_q + 19'd1;
+                end
+            end else begin
+                prefix_timeout_q <= 19'd0;
             end
         end
     end

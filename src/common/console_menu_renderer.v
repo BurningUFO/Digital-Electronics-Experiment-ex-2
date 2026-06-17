@@ -1,3 +1,9 @@
+// Pixel renderer for the boot/menu screen.
+//
+// The renderer is intentionally self-contained: text glyphs, menu item labels,
+// and simple background graphics are generated from pixel_x/pixel_y without any
+// external ROM.  The output is combinational RGB for the current pixel; the top
+// level samples it on pixel_tick before driving the VGA pins.
 module console_menu_renderer (
     input  wire       clk,
     input  wire       reset,
@@ -32,6 +38,7 @@ module console_menu_renderer (
     localparam integer HELP_SCALE = 2;
     localparam integer HELP_COUNT = 40;
 
+    // Frame-rate animation counter used only for the selected-item blink.
     reg [25:0] blink_counter;
 
     integer item_y;
@@ -68,6 +75,8 @@ module console_menu_renderer (
         end
     end
 
+    // Small fixed strings for the menu.  ASCII character values are passed to
+    // glyph_row/glyph_pixel below.
     function [7:0] title_char;
         input integer idx;
         begin
@@ -205,6 +214,7 @@ module console_menu_renderer (
         end
     endfunction
 
+    // 5x7 uppercase bitmap font.  Each return value is one row of the glyph.
     function [4:0] glyph_row;
         input [7:0] ch;
         input [2:0] row;
@@ -400,6 +410,8 @@ module console_menu_renderer (
         end
     endfunction
 
+    // Constant multiply/divide helpers avoid synthesizing generic division for
+    // pixel-to-character mapping.  They encode the menu's fixed scale factors.
     function [9:0] mul30_4;
         input [3:0] value;
         begin
@@ -528,6 +540,8 @@ module console_menu_renderer (
         end
     endfunction
 
+    // Decode the current pixel into title text, menu item body/border/text, and
+    // footer help text.  Drawing priority is applied at the end of this block.
     always @(*) begin
         title_on = 1'b0;
         item_text_on = 1'b0;

@@ -1,3 +1,8 @@
+// Slot 1 adapter for Tank War.
+//
+// The original tank game has its own top-level-style port names, so this wrapper
+// translates the common Game Slot API into tank_top.  All physical VGA and PS/2
+// services still come from game_console_top; this file should remain thin.
 module game_slot1_top (
     input  wire        clk,
     input  wire        reset,
@@ -33,6 +38,9 @@ module game_slot1_top (
     output wire        buzzer
 );
 
+    // Keep unused common slot inputs connected so synthesis does not warn about
+    // intentionally ignored API fields.  Tank uses PS/2 byte events rather than
+    // board buttons or raw PS/2 lines.
     wire _unused_slot1_api = &{
         1'b0,
         frame_tick,
@@ -46,6 +54,9 @@ module game_slot1_top (
         ps2_data
     };
 
+    // Tank receives reset when the console is reset or when this slot is not
+    // launched.  That prevents hidden gameplay/audio state from leaking across
+    // menu switches.
     tank_top u_tank_top (
         .CLK100MHZ(clk),
         .reset(reset | ~selected),

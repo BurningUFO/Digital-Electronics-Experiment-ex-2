@@ -1,3 +1,9 @@
+// Slot 3 top-level: Matrix-inspired rescue/combat game.
+//
+// The slot is split into focused blocks:
+// input -> player -> map/entities/quest/combat -> renderer.
+// This top-level wires those blocks together, stages renderer inputs on
+// pixel_tick, and owns the coarse game state machine.
 module game_slot3_top (
     input  wire        clk,
     input  wire        reset,
@@ -33,6 +39,8 @@ module game_slot3_top (
     output wire        buzzer
 );
 
+    // Coarse game states.  Map generation is explicit because the tile map is
+    // filled over multiple clocks before active play begins.
     localparam [2:0] ST_START = 3'd0;
     localparam [2:0] ST_PLAY  = 3'd1;
     localparam [2:0] ST_LOAD  = 3'd2;
@@ -55,6 +63,9 @@ module game_slot3_top (
     reg        start_level_req;
     reg        start_level_d;
 
+    // Slot-local reset is replicated into several registers.  The attributes
+    // limit high-fanout reset nets after synthesis and were added during timing
+    // cleanup.
     wire slot_reset_req = reset || !selected;
     (* max_fanout = 32 *) reg slot_reset_input;
     (* max_fanout = 32 *) reg slot_reset_player;
@@ -97,6 +108,7 @@ module game_slot3_top (
 
     wire input_up, input_down, input_left, input_right;
     wire confirm_pulse, shoot_pulse, bomb_pulse, emp_pulse, cloak_pulse, esc_pulse, space_pulse;
+    // Translate keyboard/buttons into movement holds and one-shot actions.
     slot3_input u_input (
         .clk(clk), .reset(slot_reset_input), .selected(selected),
         .ps2_byte_ready(ps2_byte_ready),
@@ -138,6 +150,8 @@ module game_slot3_top (
     wire walk_full_0, walk_full_1;
     wire walk_full = walk_full_0 && walk_full_1;
 
+    // Player state and inventory.  Movement is staged through try_x/try_y so
+    // map walkability can be evaluated before committing neo_x/neo_y.
     slot3_player u_player (
         .clk(clk), .reset(slot_reset_player), .frame_tick(frame_tick_q),
         .playing(playing), .move_phase(move_phase),
@@ -170,6 +184,8 @@ module game_slot3_top (
     wire [3:0] map_destroy_ty;
     wire [2:0] render_tile;
     wire [3:0] river_y;
+    // Procedural tile map.  It answers both gameplay walkability probes and the
+    // renderer's tile query for the current pixel.
     slot3_map u_map (
         .clk(clk), .reset(slot_reset_map),
         .gen_start(start_level_pulse), .seed(lfsr), .level(level),
@@ -202,6 +218,7 @@ module game_slot3_top (
     wire       combat_replicate_en;
     wire [2:0] combat_replicate_idx;
 
+    // Non-player actors: Smith enemies, NPCs, red distraction object, Trinity.
     slot3_entities u_entities (
         .clk(clk), .reset(slot_reset_entities),
         .frame_tick(frame_tick_q), .playing(playing),
@@ -244,6 +261,8 @@ module game_slot3_top (
     wire [8:0] pickup_y0, pickup_y1, pickup_y2, pickup_y3, pickup_y4, pickup_y5, pickup_y6, pickup_y7;
     wire [2:0] pickup_type0, pickup_type1, pickup_type2, pickup_type3, pickup_type4, pickup_type5, pickup_type6, pickup_type7;
     wire [7:0] pickup_active;
+    // Quest progression and pickups.  Touch outputs are consumed by this top
+    // level and by the player inventory logic.
     slot3_quest u_quest (
         .clk(clk), .reset(slot_reset_quest),
         .frame_tick(frame_tick_q), .playing(playing),
@@ -288,6 +307,7 @@ module game_slot3_top (
         (pickup_type1 == 3'd3), (pickup_type0 == 3'd3)
     };
 
+    // Pickup type masks are reduced to one-cycle give signals for the player.
     assign pickup_give_ammo   = |(neo_touch_pickup & pickup_active & is_ammo);
     assign pickup_give_charge = |(neo_touch_pickup & pickup_active & is_charge);
     assign pickup_give_emp    = |(neo_touch_pickup & pickup_active & is_emp);
@@ -305,6 +325,8 @@ module game_slot3_top (
 
     reg [7:0] npc_rescue_reg;
     integer ri;
+    // NPC rescue is enabled only after the terminal is hacked.  A combinational
+    // mask lets the entity block clear touched NPCs in the same frame.
     always @(*) begin
         npc_rescue_reg = 8'd0;
         do_rescue_pulse = 1'b0;
@@ -330,6 +352,8 @@ module game_slot3_top (
     wire [7:0] bomb_timer0, bomb_timer1, bomb_timer2, bomb_timer3;
     wire [3:0] bomb_active;
     wire [8:0] emp_visual;
+    // Combat owns bullets, bomb placement/explosion, EMP visual/stun, and the
+    // Smith replication event.
     slot3_combat u_combat (
         .clk(clk), .reset(slot_reset_combat),
         .frame_tick(frame_tick_q), .playing(playing), .move_phase(move_phase),
@@ -367,6 +391,7 @@ module game_slot3_top (
     reg  [9:0] text_origin_y;
     reg  [1:0] text_scale;
     wire text_hit;
+    // Select a small text message and placement based on game/quest state.
     always @(*) begin
         text_msg_id = 5'd0;
         text_origin_x = 10'd200;
@@ -465,6 +490,8 @@ module game_slot3_top (
     (* keep = "true" *) reg [9:0]  text_origin_y_video_q;
     (* keep = "true" *) reg [1:0]  text_scale_video_q;
 
+    // Small decimal helpers for HUD ammo.  They avoid inserting a divider into
+    // the pixel path.
     function [3:0] slot3_dec_tens6;
         input [5:0] value;
         begin
@@ -500,6 +527,8 @@ module game_slot3_top (
         .hit(text_hit)
     );
 
+    // Video staging boundary.  The renderer sees a stable snapshot of many game
+    // signals while it computes the next pixel color.
     always @(posedge clk) begin
         if (slot_reset_video) begin
             selected_video_q <= 1'b0;
@@ -614,6 +643,7 @@ module game_slot3_top (
         end
     end
 
+    // Register final slot RGB at pixel_tick.
     always @(posedge clk) begin
         if (slot_reset_video) begin
             vga_r <= 4'h0;
@@ -626,6 +656,8 @@ module game_slot3_top (
         end
     end
 
+    // Layered pixel renderer for map, actors, projectiles, pickups, HUD, and
+    // start/win/lose screens.
     slot3_renderer u_renderer (
         .clk(clk),
         .pixel_x(pixel_x), .pixel_y(pixel_y),
@@ -684,6 +716,7 @@ module game_slot3_top (
 
     reg neo_hit_smith;
     integer hi;
+    // Player loses when Neo overlaps an active Smith.
     always @(*) begin
         neo_hit_smith = 1'b0;
         for (hi = 0; hi < 8; hi = hi + 1) begin
@@ -695,6 +728,7 @@ module game_slot3_top (
         end
     end
 
+    // Free-running LFSR feeds map/entity placement and simple wandering motion.
     always @(posedge clk) begin
         if (slot_reset_ctrl) begin
             lfsr <= 32'h4D595DF4;
@@ -703,6 +737,8 @@ module game_slot3_top (
         end
     end
 
+    // Coarse game controller.  Lower-level modules own their object/quest state;
+    // this FSM only switches screens and starts levels.
     always @(posedge clk) begin
         if (slot_reset_ctrl) begin
             state <= ST_START;

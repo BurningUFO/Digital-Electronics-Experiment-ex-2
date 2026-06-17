@@ -1,3 +1,6 @@
+// Simple placeholder slot used when a game is not implemented or is stubbed out
+// for synthesis/simulation.  It follows the same public slot API as real games
+// and provides a visible "alive" screen plus quiet board outputs.
 module blank_game_slot #(
     parameter [2:0] SLOT_ID = 3'd1,
     parameter [3:0] BASE_R  = 4'h2,
@@ -44,6 +47,8 @@ module blank_game_slot #(
     wire border;
     wire grid;
     wire stripe;
+    // Flash more aggressively if any local input reaches the placeholder.  This
+    // is useful when checking top-level routing without a real game module.
     wire input_active;
 
     assign border = (pixel_x < 10'd16) || (pixel_x >= 10'd624) ||
@@ -63,6 +68,8 @@ module blank_game_slot #(
         end
     end
 
+    // Draw a low-cost diagnostic pattern: background gradient, slot-specific
+    // vertical stripes, and an input highlight.
     always @(*) begin
         if (!display_active || !selected) begin
             vga_r = 4'h0;
