@@ -1,3 +1,7 @@
+// Frame-rate gravity tick generator for slot 2.
+//
+// The game core updates at 100 MHz, but natural falling speed is expressed in
+// video frames.  Higher levels reduce the frame threshold so pieces drop faster.
 module slot2_tick_gen (
     input  wire       clk,
     input  wire       reset,
@@ -9,6 +13,8 @@ module slot2_tick_gen (
     reg [5:0] frame_counter;
     reg [5:0] gravity_threshold;
 
+    // Level-to-frame-period table.  The threshold is the number of frame_tick
+    // pulses between automatic downward moves.
     always @(*) begin
         case (level)
             4'd0:  gravity_threshold = 6'd48;
@@ -27,6 +33,7 @@ module slot2_tick_gen (
         endcase
     end
 
+    // Emit a one-clock pulse when the frame counter reaches the level threshold.
     always @(posedge clk) begin
         if (reset) begin
             frame_counter <= 6'd0;

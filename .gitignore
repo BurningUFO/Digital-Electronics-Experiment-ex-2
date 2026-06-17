@@ -17,3 +17,5 @@ xsim.dir/
 dfx_runtime.txt
 game3_preview/
 .claude/
+__pycache__/
+*.pyc

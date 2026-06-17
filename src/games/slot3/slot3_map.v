@@ -1,3 +1,9 @@
+// Tile map and walkability service for slot 3.
+//
+// The map is a 20x15 grid of 32x32 tiles.  It serves three clients:
+// - movement collision probes from slot3_player;
+// - render_tile lookup for slot3_renderer;
+// - destroy_en writes from combat bombs.
 module slot3_map (
     input  wire        clk,
     input  wire        reset,
@@ -32,8 +38,11 @@ module slot3_map (
     localparam [2:0] TILE_BUILDING = 3'd3;
     localparam [2:0] TILE_TREE     = 3'd4;
 
+    // Distributed RAM is enough for 300 small tile entries and keeps the map
+    // easy to update during gameplay.
     (* ram_style = "distributed" *) reg [2:0] tile_map [0:299];
 
+    // Address = ty * 20 + tx, implemented with shifts/adds.
     function [8:0] tile_addr;
         input [4:0] tx;
         input [3:0] ty;
@@ -42,6 +51,7 @@ module slot3_map (
         end
     endfunction
 
+    // Deterministic map templates selected by seed bits at level start.
     function [2:0] template_tile;
         input [1:0] template_id;
         input [4:0] tx;
@@ -101,6 +111,7 @@ module slot3_map (
     wire walkable_tile2 = (t2 == TILE_STREET) || (t2 == TILE_BRIDGE) || (t2 == TILE_TREE);
     wire walkable_tile3 = (t3 == TILE_STREET) || (t3 == TILE_BRIDGE) || (t3 == TILE_TREE);
 
+    // Four independent point queries let callers check actor corners.
     assign walk0 = (query_x0 < 10'd640) && (query_y0 < 9'd480) && walkable_tile0;
     assign walk1 = (query_x1 < 10'd640) && (query_y1 < 9'd480) && walkable_tile1;
     assign walk2 = (query_x2 < 10'd640) && (query_y2 < 9'd480) && walkable_tile2;
@@ -120,6 +131,8 @@ module slot3_map (
             tile_map[init_i] = TILE_STREET;
     end
 
+    // Fill one tile per clock after gen_start.  This avoids a large one-cycle
+    // write fanout and asserts gen_done when the whole grid is ready.
     always @(posedge clk) begin
         if (reset) begin
             gen_done <= 1'b0;

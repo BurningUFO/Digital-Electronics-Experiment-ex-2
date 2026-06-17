@@ -1,3 +1,8 @@
+// Combat and destructive actions for slot 3.
+//
+// Owns bullets, the single active bomb, EMP stun effects, resource-consume
+// pulses, and the Smith/NPC replication scan.  Outputs are masks/events so the
+// entity and map modules can apply state changes in their own clocked blocks.
 module slot3_combat (
     input  wire        clk,
     input  wire        reset,
@@ -65,6 +70,8 @@ module slot3_combat (
     reg [2:0] replicate_scan_smith;
     reg [2:0] replicate_scan_npc;
 
+    // Local arrays make collision loops readable while keeping module ports
+    // flattened for tool compatibility.
     wire [9:0] sx [0:7];
     wire [8:0] sy [0:7];
     wire [9:0] nx [0:7];
@@ -132,6 +139,8 @@ module slot3_combat (
                 bomb_cooldown <= bomb_cooldown - 4'd1;
             end
 
+            // Shooting uses up to two active bullet slots and emits use_ammo
+            // only when a bullet is successfully spawned.
             if (shoot_pulse && playing && ammo != 6'd0 && shoot_cooldown == 4'd0) begin
                 if (!bullet_active[0]) begin
                     bullet_x[0] <= neo_x + 10'd8;
@@ -150,6 +159,8 @@ module slot3_combat (
                 end
             end
 
+            // Bomb placement is offset in Neo's facing direction.  The bomb
+            // later destroys one map tile and damages nearby Smiths.
             if (bomb_pulse && playing && charges != 3'd0 && bomb_cooldown == 4'd0 && !bomb_active[0]) begin
                 case (neo_dir)
                     2'd0: begin bomb_x <= neo_x; bomb_y <= (neo_y > 9'd24) ? neo_y - 9'd24 : 9'd0; end
@@ -163,6 +174,7 @@ module slot3_combat (
                 bomb_cooldown <= 4'd8;
             end
 
+            // EMP applies a Manhattan-distance stun mask around Neo.
             if (emp_pulse && playing && emp_count != 2'd0) begin
                 use_emp <= 1'b1;
                 emp_visual <= 9'd96;
@@ -177,6 +189,7 @@ module slot3_combat (
             end
 
             if (frame_tick && playing) begin
+                // Projectiles and timed effects advance at the video frame rate.
                 if (emp_visual != 9'd0)
                     emp_visual <= emp_visual - 9'd1;
 
@@ -225,6 +238,9 @@ module slot3_combat (
                     end
                 end
 
+                // Scan one Smith/NPC pair per frame for replication.  This keeps
+                // the nested overlap search out of a single large combinational
+                // block.
                 if (!replication_used && smith_active[replicate_scan_smith] && npc_alive[replicate_scan_npc]) begin
                     if (sx[replicate_scan_smith] + SMITH_W > nx[replicate_scan_npc] &&
                         sx[replicate_scan_smith] < nx[replicate_scan_npc] + NPC_W &&

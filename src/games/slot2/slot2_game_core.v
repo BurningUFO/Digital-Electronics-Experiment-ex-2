@@ -1,3 +1,13 @@
+// Gameplay core for the slot 2 falling-block game.
+//
+// This module intentionally contains no VGA drawing or board I/O scanning.  It
+// owns the game rules: current/next piece state, collision checks, ghost piece,
+// locking, line clearing, compaction, score, level, and game-over state.
+//
+// Timing note: the ghost calculation, piece locking, and row compaction are
+// split across multiple 100 MHz cycles.  That keeps critical paths shorter while
+// remaining visually equivalent because all work completes inside video-frame
+// time.
 module slot2_game_core (
     input  wire        clk,
     input  wire        reset,
@@ -25,6 +35,8 @@ module slot2_game_core (
     output reg  [2:0]  line_clear_count
 );
 
+    // Main control states.  Work that could be a long combinational path is
+    // broken into row/probe states rather than completed in one cycle.
     localparam ST_PLAYING       = 4'd0;
     localparam ST_HARD_DROP     = 4'd1;
     localparam ST_LOCK_ROW      = 4'd2;
@@ -73,6 +85,7 @@ module slot2_game_core (
     assign level = level_reg;
     assign game_over = (state == ST_GAME_OVER);
 
+    // 4x4 tetromino shape ROM.  The 16-bit value is indexed by row*4+column.
     function [15:0] piece_shape;
         input [2:0] ptype;
         input [1:0] prot;
@@ -117,6 +130,8 @@ module slot2_game_core (
         end
     endfunction
 
+    // Return one 10-bit board row.  Out-of-range rows are treated as full so
+    // collision checks naturally block movement below the board.
     function [9:0] board_row;
         input [4:0] row_idx;
         begin
@@ -159,6 +174,8 @@ module slot2_game_core (
         end
     endfunction
 
+    // Check one shape row against the board and side/bottom boundaries.
+    // Splitting collision this way keeps repeated board-row access localized.
     function row_collision;
         input signed [4:0] px;
         input [6:0] py;
@@ -194,6 +211,7 @@ module slot2_game_core (
         end
     endfunction
 
+    // Full 4-row piece collision helper.
     function collision;
         input signed [4:0] px;
         input [6:0] py;
@@ -209,7 +227,9 @@ module slot2_game_core (
         end
     endfunction
 
-    // lock piece into board
+    // Lock the entire piece into a temporary board value.  The runtime FSM below
+    // uses a row-by-row lock path for timing, but this helper documents the full
+    // board merge behavior and remains available for reference/reuse.
     function [199:0] lock_to_board;
         input [199:0] old_board;
         input signed [4:0] px;
@@ -266,6 +286,8 @@ module slot2_game_core (
         end
     endfunction
 
+    // Build the 10-bit mask for a single locked piece row.  The FSM ORs one row
+    // per cycle into board_reg.
     function [9:0] lock_row_mask;
         input signed [4:0] px;
         input [1:0] row_idx;
@@ -288,6 +310,7 @@ module slot2_game_core (
         end
     endfunction
 
+    // Total-line thresholds for level-up.
     function [9:0] level_goal;
         input [3:0] lvl;
         begin
@@ -322,6 +345,9 @@ module slot2_game_core (
     wire [6:0] lock_abs_y = {1'b0, cur_y} + {5'd0, lock_row_idx};
     wire [9:0] lock_mask = lock_row_mask(cur_x, lock_row_idx, cur_rot, cur_type);
 
+    // Start an iterative ghost-piece search.  The search probes one row at a
+    // time across multiple cycles instead of walking the entire drop distance in
+    // one combinational path.
     task start_ghost_calc;
         input [5:0] start_y;
         begin
@@ -333,6 +359,8 @@ module slot2_game_core (
         end
     endtask
 
+    // Enter the row-by-row lock sequence and emit the visible lock pulse used by
+    // the top-level buzzer/LED logic.
     task begin_lock_piece;
         begin
             lock_row_idx <= 2'd0;
@@ -344,6 +372,7 @@ module slot2_game_core (
         end
     endtask
 
+    // Main gameplay FSM.
     always @(posedge clk) begin
         if (reset) begin
             state <= ST_PLAYING;
@@ -381,6 +410,8 @@ module slot2_game_core (
 
             case (state)
                 ST_PLAYING: begin
+                    // Normal play handles spawning, input movement, gravity,
+                    // soft/hard drop requests, and background ghost updates.
                     if (spawn_req) begin
                         spawn_req <= 1'b0;
                         cur_type <= nxt_type;
@@ -397,6 +428,8 @@ module slot2_game_core (
                         end
                     end else begin
                         if (ghost_busy) begin
+                            // Two-cycle ghost probe: first register the
+                            // collision result, then either stop or advance.
                             if (!ghost_eval_valid) begin
                                 ghost_blocked_q <= ghost_probe_blocked;
                                 ghost_eval_valid <= 1'b1;
@@ -452,6 +485,8 @@ module slot2_game_core (
                 end
 
                 ST_HARD_DROP: begin
+                    // Hard drop advances one row per clock until the next row
+                    // would collide, then locks the piece.
                     if (!collision(cur_x, {1'b0, cur_y} + 7'd1, cur_rot, cur_type)) begin
                         cur_y <= cur_y + 6'd1;
                     end else begin
@@ -460,6 +495,8 @@ module slot2_game_core (
                 end
 
                 ST_LOCK_ROW: begin
+                    // Merge one 4x4 shape row into board_reg per cycle.  This
+                    // avoids a wide one-cycle board update.
                     case (lock_abs_y)
                         7'd0:  board_reg[0 +: 10]   <= board_reg[0 +: 10]   | lock_mask;
                         7'd1:  board_reg[10 +: 10]  <= board_reg[10 +: 10]  | lock_mask;
@@ -493,6 +530,8 @@ module slot2_game_core (
                 end
 
                 ST_CLEAR_ANIM: begin
+                    // Small delay after locking before scanning rows.  It gives
+                    // visual/audio feedback without changing game rules.
                     if (clear_delay > 5'd0) begin
                         clear_delay <= clear_delay - 5'd1;
                     end else begin
@@ -504,6 +543,7 @@ module slot2_game_core (
                 end
 
                 ST_ROW_SCAN: begin
+                    // Scan all 20 board rows and record which rows are full.
                     if (current_row_full) begin
                         rows_full_reg[row_scan_idx] <= 1'b1;
                         if (rows_to_clear < 3'd4) rows_to_clear <= rows_to_clear + 3'd1;
@@ -517,6 +557,7 @@ module slot2_game_core (
                 end
 
                 ST_COMPACT_PREP: begin
+                    // Prepare a fresh compacted board image.
                     compact_reg <= 200'd0;
                     compact_src <= 5'd19;
                     compact_dst <= 5'd19;
@@ -524,6 +565,7 @@ module slot2_game_core (
                 end
 
                 ST_COMPACT_SCAN: begin
+                    // Copy non-full rows downward from bottom to top.
                     if (!rows_full_reg[compact_src]) begin
                         compact_reg[compact_dst*10 +: 10] <= board_reg[compact_src*10 +: 10];
                         if (compact_dst > 5'd0) compact_dst <= compact_dst - 5'd1;
@@ -537,6 +579,8 @@ module slot2_game_core (
                 end
 
                 ST_COMPACT_APPLY: begin
+                    // Commit cleared rows, score, line count, and level.  Then
+                    // request a fresh piece spawn in ST_PLAYING.
                     if (rows_to_clear > 3'd0) begin
                         board_reg <= compact_reg;
                         line_clear_pulse <= 1'b1;
@@ -559,6 +603,7 @@ module slot2_game_core (
                 end
 
                 ST_GAME_OVER: begin
+                    // Wait for hard_drop as a simple restart command.
                 end
             endcase
         end

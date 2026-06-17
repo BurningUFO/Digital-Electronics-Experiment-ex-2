@@ -1,3 +1,9 @@
+// Slot 4 top-level: two-character fire/water platform puzzle.
+//
+// The game uses a tile map for three levels.  Fire and water characters move
+// through the map, collect matching gems, press buttons to open gates, and reach
+// their doors.  Physics and status checks are staged across several 100 MHz
+// cycles so collision paths do not become one long combinational chain.
 module game_slot4_top (
     input  wire        clk,
     input  wire        reset,
@@ -33,6 +39,7 @@ module game_slot4_top (
     output wire        buzzer
 );
 
+    // Geometry and movement constants.  The map is 32x24 cells of 20 pixels.
     localparam integer CELL = 20;
     localparam integer SCREEN_W = 640;
     localparam integer SCREEN_H = 480;
@@ -45,6 +52,7 @@ module game_slot4_top (
     localparam integer COLLIDE_INSET_X = 4;
     localparam integer COLLIDE_INSET_Y = 4;
 
+    // Tile encoding used by the level ROM and renderer.
     localparam [3:0] TILE_EMPTY      = 4'd0;
     localparam [3:0] TILE_WALL       = 4'd1;
     localparam [3:0] TILE_FIRE       = 4'd2;
@@ -57,6 +65,9 @@ module game_slot4_top (
     localparam [3:0] TILE_BUTTON     = 4'd9;
     localparam [3:0] TILE_GATE       = 4'd10;
 
+    // Multi-cycle physics pipeline.  X and Y movement for each character are
+    // split into TEST/EVAL/APPLY phases to register tile probe addresses and
+    // collision results.
     localparam [3:0] PHYS_IDLE           = 4'd0;
     localparam [3:0] PHYS_FIRE_X_TEST    = 4'd1;
     localparam [3:0] PHYS_FIRE_X_EVAL    = 4'd2;
@@ -71,6 +82,7 @@ module game_slot4_top (
     localparam [3:0] PHYS_WATER_Y_EVAL   = 4'd11;
     localparam [3:0] PHYS_WATER_Y_APPLY  = 4'd12;
 
+    // Tile ROM address = level offset + y*32 + x.
     function [11:0] slot4_tile_addr;
         input [1:0] lvl;
         input [4:0] tx;
@@ -84,6 +96,7 @@ module game_slot4_top (
         end
     endfunction
 
+    // Three 32x24 levels, each storing 4-bit tile IDs.
     (* rom_style = "distributed" *) reg [3:0] slot4_tile_rom [0:2303];
 
     task slot4_set_tile;
@@ -125,6 +138,8 @@ module game_slot4_top (
     integer init_i;
     integer init_lvl;
     integer init_pos;
+    // Level data is built from simple fill tasks.  This keeps the map readable
+    // in source while still synthesizing as initialized distributed ROM.
     initial begin
         for (init_i = 0; init_i < 2304; init_i = init_i + 1)
             slot4_tile_rom[init_i] = TILE_EMPTY;
@@ -222,6 +237,7 @@ module game_slot4_top (
         slot4_set_tile(2'd2, 5'd10, 5'd13, TILE_WATER_GEM);
     end
 
+    // Raw keyboard control state from the PS/2 scan-code mapper.
     wire fire_left_key;
     wire fire_right_key;
     wire fire_jump_key;
@@ -230,6 +246,7 @@ module game_slot4_top (
     wire water_jump_key;
     wire water_down_key;
 
+    // Gameplay registers.
     reg [1:0] level;
     reg won;
     reg [9:0] fire_x;
@@ -299,6 +316,8 @@ module game_slot4_top (
     reg [3:0] render_b;
     reg [6:0] seg_n;
 
+    // Registered probe/candidate state used by the staged physics/status
+    // pipeline.
     reg [9:0] phys_x_candidate;
     reg signed [11:0] phys_y_candidate;
     reg signed [5:0] phys_vy_candidate;
@@ -330,6 +349,7 @@ module game_slot4_top (
     reg [11:0] water_ground_addr1_q;
     reg [1:0] next_level;
 
+    // Video staging registers sampled on pixel_tick before the pixel renderer.
     (* keep = "true" *) reg selected_video_q;
     (* keep = "true" *) reg display_active_video_q;
     (* keep = "true" *) reg [1:0] level_video_q;
@@ -387,6 +407,8 @@ module game_slot4_top (
     wire level_complete_eval_now;
     wire level_failed_eval_now;
 
+    // Gate policy differs by level: level 0 gate is always open, later levels
+    // require one or both buttons.
     assign gate_open_now = (level == 2'd0) ? 1'b1 :
                        (level == 2'd1) ? button_mask[0] :
                                          (button_mask[0] | button_mask[1]);
@@ -394,6 +416,8 @@ module game_slot4_top (
     assign fire_grounded = fire_grounded_q;
     assign water_grounded = water_grounded_q;
 
+    // Board buttons duplicate the fire controls.  Switches give water fallback
+    // controls for board-only testing.
     assign fire_left_cmd = fire_left_key_q | btn_l_q;
     assign fire_right_cmd = fire_right_key_q | btn_r_q;
     assign fire_jump_cmd = fire_jump_key_q | btn_u_q;
@@ -416,6 +440,7 @@ module game_slot4_top (
     assign fire_ground_tile1 = slot4_tile_rom[fire_ground_addr1_q];
     assign water_ground_tile0 = slot4_tile_rom[water_ground_addr0_q];
     assign water_ground_tile1 = slot4_tile_rom[water_ground_addr1_q];
+    // Registered status tiles decide whether the level is complete or failed.
     assign level_complete_eval_now = status_fire_all_gems_q && status_water_all_gems_q &&
                             ((fire_status_tile0 == TILE_FIRE_DOOR) ||
                              (fire_status_tile1 == TILE_FIRE_DOOR) ||
@@ -448,6 +473,8 @@ module game_slot4_top (
     assign fire_pick_mask_now = slot4_fire_pick_mask(level, fire_x, fire_y);
     assign water_pick_mask_now = slot4_water_pick_mask(level, water_x, water_y);
     assign button_pick_mask_now = slot4_button_pick_mask(level, fire_x, fire_y, water_x, water_y);
+    // Collision probe result after stage_solid_* has registered two relevant
+    // tile addresses and out-of-bounds flags.
     assign phys_probe_solid =
         phys_probe_oob0_q || phys_probe_oob1_q ||
         slot4_is_solid_tile(slot4_tile_rom[phys_probe_addr0_q], gate_open_q) ||
@@ -475,6 +502,7 @@ module game_slot4_top (
                        (pixel_x >= water_x_video_q + 10'd2) && (pixel_x <= water_x_video_q + 10'd4) &&
                        (pixel_y >= water_y_video_q + 10'd5) && (pixel_y <= water_y_video_q + 10'd7);
 
+    // PS/2 mapper for independent fire and water controls.
     slot4_keyboard_mapper u_slot4_keyboard_mapper (
         .clk(clk),
         .reset(reset | ~selected),
@@ -489,6 +517,7 @@ module game_slot4_top (
         .water_down(water_down_key)
     );
 
+    // Per-level spawn positions.
     function [9:0] slot4_fire_start_x;
         input [1:0] lvl;
         begin
@@ -533,6 +562,7 @@ module game_slot4_top (
         end
     endfunction
 
+    // Gates are solid only while closed; walls are always solid.
     function slot4_is_solid_tile;
         input [3:0] tile;
         input open_gate;
@@ -541,6 +571,8 @@ module game_slot4_top (
         end
     endfunction
 
+    // Pixel-to-cell helpers are written as compare tables instead of /20 or %20
+    // so the renderer and collision probes avoid expensive dividers.
     function [4:0] slot4_pixel_to_cell_x;
         input [9:0] px;
         begin
@@ -626,6 +658,8 @@ module game_slot4_top (
         end
     endfunction
 
+    // Read the effective tile at a pixel coordinate.  Collected gems and open
+    // gates are treated as empty for gameplay purposes.
     function [3:0] slot4_tile_at_pixel;
         input [1:0] lvl;
         input [9:0] px;
@@ -717,6 +751,8 @@ module game_slot4_top (
         end
     endfunction
 
+    // Stage the two tile probes needed to test horizontal movement.  The tile
+    // values are evaluated on the following clock.
     task slot4_stage_solid_x_probe;
         input [1:0] lvl;
         input [9:0] px;
@@ -738,6 +774,7 @@ module game_slot4_top (
         end
     endtask
 
+    // Stage the two tile probes needed to test vertical movement.
     task slot4_stage_solid_y_probe;
         input [1:0] lvl;
         input [9:0] px;
@@ -759,6 +796,8 @@ module game_slot4_top (
         end
     endtask
 
+    // Stage all status probes for hazards, doors, gems, buttons, and grounded
+    // checks.  Status evaluation/apply then occurs over the next two clocks.
     task slot4_stage_status_probes;
         input [1:0] lvl;
         input [9:0] fx;
@@ -863,6 +902,8 @@ module game_slot4_top (
         end
     endfunction
 
+    // Gem/button helpers return small masks so collection can be ORed into the
+    // current collected-state registers.
     function [3:0] slot4_fire_pick_mask;
         input [1:0] lvl;
         input [9:0] px;
@@ -1004,6 +1045,7 @@ module game_slot4_top (
         end
     endfunction
 
+    // Seven-segment active-low digit decoder.
     function [6:0] slot4_seg_digit;
         input [3:0] digit;
         begin
@@ -1023,6 +1065,8 @@ module game_slot4_top (
         end
     endfunction
 
+    // Candidate motion helpers.  They clamp to screen edges; collision against
+    // solid tiles is handled by the staged physics FSM.
     function [9:0] slot4_next_x_candidate;
         input [9:0] px;
         input left_cmd;
@@ -1082,6 +1126,8 @@ module game_slot4_top (
         end
     endfunction
 
+    // Main game update pipeline.  Input sampling, status probe/evaluate/apply,
+    // and physics movement are all staged to keep timing manageable.
     always @(posedge clk) begin
         if (reset) begin
             frame_tick_q <= 1'b0;
@@ -1204,6 +1250,7 @@ module game_slot4_top (
             sw2_sync1 <= sw2_sync0;
 
             if (pixel_tick) begin
+                // Snapshot gameplay state for the renderer.
                 selected_video_q <= selected;
                 display_active_video_q <= display_active;
                 level_video_q <= level;
@@ -1219,6 +1266,7 @@ module game_slot4_top (
             end
 
             if (frame_tick) begin
+                // Sample asynchronous board controls once per video frame.
                 btn_u_q <= btn_u_sync1;
                 btn_d_q <= btn_d_sync1;
                 btn_l_q <= btn_l_sync1;
@@ -1261,6 +1309,8 @@ module game_slot4_top (
 
             case (phys_state)
                 PHYS_IDLE: begin
+                    // Start one frame of gameplay update after status results
+                    // have been applied.
                     if (selected && frame_step_q) begin
                         frame_counter <= frame_counter + 24'd1;
 
@@ -1315,6 +1365,7 @@ module game_slot4_top (
                 end
 
                 PHYS_FIRE_X_TEST: begin
+                    // Register tile probes for Fire horizontal movement.
                     phys_collision_skip_q <= (phys_x_candidate == fire_x);
                     slot4_stage_solid_x_probe(level, phys_x_candidate, fire_y, phys_x_candidate > fire_x);
                     phys_state <= PHYS_FIRE_X_EVAL;
@@ -1353,6 +1404,7 @@ module game_slot4_top (
                 end
 
                 PHYS_FIRE_Y_TEST: begin
+                    // Register tile probes for Fire vertical movement.
                     phys_collision_skip_q <= (phys_y_candidate < 12'sd1) ||
                                              (phys_y_candidate > SCREEN_H - PLAYER_H - 1);
                     slot4_stage_solid_y_probe(level, fire_x, phys_y_candidate[9:0],
@@ -1388,6 +1440,7 @@ module game_slot4_top (
                 end
 
                 PHYS_WATER_Y_TEST: begin
+                    // Register tile probes for Water vertical movement.
                     phys_collision_skip_q <= (phys_y_candidate < 12'sd1) ||
                                              (phys_y_candidate > SCREEN_H - PLAYER_H - 1);
                     slot4_stage_solid_y_probe(level, water_x, phys_y_candidate[9:0],
@@ -1423,6 +1476,9 @@ module game_slot4_top (
         end
     end
 
+    // Pixel renderer.  It uses staged video state, maps the current pixel to a
+    // tile/local coordinate, masks collected/open objects, and then applies
+    // character/tile drawing priority.
     always @(*) begin
         cell_x = slot4_pixel_to_cell_x(pixel_x);
         cell_y = slot4_pixel_to_cell_y(pixel_y);
@@ -1574,6 +1630,7 @@ module game_slot4_top (
         end
     end
 
+    // Register final slot RGB at pixel_tick.
     always @(posedge clk) begin
         if (reset) begin
             vga_r <= 4'h0;
@@ -1586,6 +1643,7 @@ module game_slot4_top (
         end
     end
 
+    // One active digit shows current level, or 8 after the final win.
     always @(*) begin
         if (!selected) begin
             seg_n = 7'b1111111;
@@ -1596,6 +1654,7 @@ module game_slot4_top (
         end
     end
 
+    // LED debug layout: win/gate/buttons/gems/level/grounded flags.
     assign led = selected ? {
         won,
         gate_open,
@@ -1615,6 +1674,10 @@ module game_slot4_top (
 
 endmodule
 
+// PS/2 set-2 scan-code mapper for slot 4.
+//
+// Fire uses A/D/W.  Water uses arrow keys plus S/Down for crouch/drop.  The
+// mapper stores held key state and ignores release prefixes for command pulses.
 module slot4_keyboard_mapper (
     input  wire       clk,
     input  wire       reset,
@@ -1642,6 +1705,9 @@ module slot4_keyboard_mapper (
 
     reg break_pending;
     reg extend_pending;
+    reg [18:0] prefix_timeout_q;
+
+    localparam [18:0] PREFIX_TIMEOUT_CYCLES = 19'd500000;
 
     always @(posedge clk) begin
         if (reset) begin
@@ -1654,7 +1720,9 @@ module slot4_keyboard_mapper (
             water_down <= 1'b0;
             break_pending <= 1'b0;
             extend_pending <= 1'b0;
+            prefix_timeout_q <= 19'd0;
         end else if (byte_ready) begin
+            prefix_timeout_q <= 19'd0;
             if (byte_data == SCAN_F0) begin
                 break_pending <= 1'b1;
             end else if (byte_data == SCAN_E0) begin
@@ -1675,6 +1743,16 @@ module slot4_keyboard_mapper (
                 break_pending <= 1'b0;
                 extend_pending <= 1'b0;
             end
+        end else if (break_pending || extend_pending) begin
+            if (prefix_timeout_q == PREFIX_TIMEOUT_CYCLES) begin
+                break_pending <= 1'b0;
+                extend_pending <= 1'b0;
+                prefix_timeout_q <= 19'd0;
+            end else begin
+                prefix_timeout_q <= prefix_timeout_q + 19'd1;
+            end
+        end else begin
+            prefix_timeout_q <= 19'd0;
         end
     end
 

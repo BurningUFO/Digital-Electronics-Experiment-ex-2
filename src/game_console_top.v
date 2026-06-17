@@ -1,3 +1,14 @@
+// Top-level integration module for the Nexys A7 VGA game console.
+//
+// Responsibilities kept at this level:
+// - own the physical board pins;
+// - generate the shared VGA timing and pixel coordinate stream;
+// - receive PS/2 bytes once and fan them out to the menu and game slots;
+// - maintain menu/game selection state;
+// - multiplex VGA, LED, seven-segment, and buzzer outputs from the active slot.
+//
+// Game-specific logic should stay inside game_slotN_top modules.  This keeps the
+// slot API stable and prevents each game from reimplementing VGA or PS/2 logic.
 module game_console_top (
     input  wire        CLK100MHZ,
     input  wire        CPU_RESETN,
@@ -28,6 +39,10 @@ module game_console_top (
 );
 
     wire reset;
+    // Hold the design in reset for a short time after CPU_RESETN is released.
+    // This gives external inputs and internal state machines a deterministic
+    // starting point before the menu starts consuming PS/2 events.
+    reg  [19:0] power_on_reset_q = {20{1'b1}};
     wire [2:0] game_sel;
     wire [2:0] menu_cursor;
     wire menu_active;
@@ -94,8 +109,19 @@ module game_console_top (
     wire active_slot_buzzer;
     wire [7:0] active_seg;
 
-    assign reset = ~CPU_RESETN;
+    always @(posedge CLK100MHZ) begin
+        if (!CPU_RESETN) begin
+            power_on_reset_q <= {20{1'b1}};
+        end else if (power_on_reset_q != 20'd0) begin
+            power_on_reset_q <= power_on_reset_q - 20'd1;
+        end
+    end
 
+    assign reset = ~CPU_RESETN | (power_on_reset_q != 20'd0);
+
+    // A slot is considered selected only while the menu is inactive.  The top
+    // level also drives reset into every unselected slot so that hidden games do
+    // not continue to consume input or keep stale audio/display state alive.
     assign slot1_selected = !menu_active && (game_sel == 3'd0);
     assign slot2_selected = !menu_active && (game_sel == 3'd1);
     assign slot3_selected = !menu_active && (game_sel == 3'd2);
@@ -114,6 +140,9 @@ module game_console_top (
         end
     end
 
+    // Shared VGA timing generator.  All menu and game renderers consume the
+    // same pixel coordinate stream, which keeps the final VGA output in one
+    // clock domain and avoids per-game timing conflicts.
     console_vga_sync u_console_vga_sync (
         .clk(CLK100MHZ),
         .reset(reset),
@@ -126,6 +155,8 @@ module game_console_top (
         .frame_tick(console_frame_tick)
     );
 
+    // Shared PS/2 receiver.  It only converts serial frames into byte events;
+    // key meanings are interpreted by the menu controller or each selected slot.
     console_ps2_rx u_console_ps2_rx (
         .clk(CLK100MHZ),
         .reset(reset),
@@ -135,6 +166,8 @@ module game_console_top (
         .byte_data(console_ps2_byte_data)
     );
 
+    // Menu controller owns the high-level state: visible menu, cursor position,
+    // and the selected game index.  Games do not decide global slot selection.
     console_menu_controller u_console_menu_controller (
         .clk(CLK100MHZ),
         .reset(reset),
@@ -146,6 +179,8 @@ module game_console_top (
         .launch_pulse(menu_launch_pulse)
     );
 
+    // Menu renderer is a pure pixel renderer.  It receives the cursor and the
+    // current VGA coordinate, then produces RGB for this pixel.
     console_menu_renderer u_console_menu_renderer (
         .clk(CLK100MHZ),
         .reset(reset),
@@ -159,6 +194,10 @@ module game_console_top (
         .vga_b(menu_vga_b)
     );
 
+// Optional synthesis/simulation stubs.  These macros allow one game plus the
+// common console shell to be built while unused slots are replaced by constants.
+// This is useful for resource/timing debug because runtime reset cannot remove
+// unused slot logic from the synthesized netlist.
 `ifdef BUILD_TANK_ONLY
     `define STUB_SLOT2
     `define STUB_SLOT3
@@ -388,6 +427,8 @@ module game_console_top (
     );
 `endif
 
+    // First select the currently launched game slot.  Menu override happens
+    // later so that board outputs are quiet while the menu is active.
     assign active_slot_vga_r = slot1_selected ? slot1_vga_r :
                                slot2_selected ? slot2_vga_r :
                                slot3_selected ? slot3_vga_r :
@@ -420,6 +461,9 @@ module game_console_top (
 
     assign active_seg = active_slot_seg;
 
+    // Board output arbitration.  While the menu is visible, game outputs are
+    // masked and the LED bar shows the current menu cursor.  In game mode, only
+    // the selected slot drives the board peripherals.
     assign LED = menu_active ? (16'h8000 | (16'h0001 << menu_cursor)) :
                                 active_slot_led;
     assign AN = menu_active ? 8'b1111_1111 :
@@ -428,6 +472,8 @@ module game_console_top (
     assign BUZZER = menu_active ? 1'b1 :
                                       active_slot_buzzer;
 
+    // Final VGA mux.  HS/VS always come from the shared timing generator; only
+    // RGB changes between menu rendering and the active game slot.
     always @(*) begin
         if (menu_active) begin
             VGA_R = menu_vga_r_q;

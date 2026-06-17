@@ -1,3 +1,8 @@
+// Pixel renderer for the slot 2 falling-block game.
+//
+// Inputs are staged by game_slot2_top on pixel_tick.  This module maps the
+// current pixel to one of the visual layers: background, board/grid, placed
+// cells, ghost piece, current piece, next preview, text, and game-over overlay.
 module slot2_renderer (
     input  wire        clk,
     input  wire        reset,
@@ -44,6 +49,8 @@ module slot2_renderer (
     reg [3:0]  lvl1;
     reg [3:0]  lvl0;
 
+    // Convert score/lines/level into decimal digits over several clocks.  The
+    // renderer then reads cached digits, avoiding per-pixel division.
     always @(posedge clk) begin
         if (reset) begin
             score_sample <= 16'd0;
@@ -205,7 +212,8 @@ module slot2_renderer (
         end
     endfunction
 
-    // piece shape ROM
+    // piece shape ROM.  This mirrors the core's tetromino encoding but is kept
+    // local so rendering does not depend on core internals.
     function [15:0] piece_shape;
         input [2:0] pt;
         input [1:0] pr;
@@ -230,6 +238,7 @@ module slot2_renderer (
         end
     endfunction
 
+    // Per-piece RGB palette, packed as {R,G,B}.
     function [11:0] piece_rgb;
         input [2:0] pt;
         begin
@@ -253,6 +262,7 @@ module slot2_renderer (
         end
     endfunction
 
+    // Fixed sidebar and overlay strings.
     function [7:0] fixed_text_char;
         input [3:0] msg_id;
         input [4:0] idx;
@@ -435,6 +445,7 @@ module slot2_renderer (
         end
     endfunction
 
+    // Return true when the current pixel hits a fixed text string.
     function text_on;
         input [9:0] px;
         input [9:0] py;
@@ -489,6 +500,7 @@ module slot2_renderer (
         end
     endfunction
 
+    // Return true when the current pixel hits one of the cached decimal digits.
     function digit_text_on;
         input [9:0] px;
         input [9:0] py;
@@ -518,6 +530,8 @@ module slot2_renderer (
         end
     endfunction
 
+    // Constant multiply helpers for board coordinate mapping.  They avoid
+    // generic pixel-path multiplication/division.
     function [9:0] mul20_5;
         input [4:0] value;
         begin
@@ -532,7 +546,7 @@ module slot2_renderer (
         end
     endfunction
 
-    // signals for board area
+    // Signals for board area and next-piece preview coordinate decoding.
     wire in_board;
     wire [9:0] bx, by;
     wire [4:0] cell_x, cell_y;
@@ -594,7 +608,8 @@ module slot2_renderer (
                          (next_by < 10'd40) ? 5'd1 :
                          (next_by < 10'd60) ? 5'd2 : 5'd3;
 
-    // piece rendering helpers
+    // Piece rendering helper.  It converts a board cell coordinate into a 4x4
+    // piece-local coordinate and tests the corresponding shape bit.
     function piece_block_on;
         input [4:0] cx;
         input [5:0] cy;
@@ -621,6 +636,8 @@ module slot2_renderer (
         end
     endfunction
 
+    // Layered pixel compositor.  Later checks override earlier background/grid
+    // colors, so current piece appears above ghost and fixed blocks.
     always @(*) begin
         vga_r = 4'h0;
         vga_g = 4'h0;

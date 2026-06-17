@@ -1,3 +1,9 @@
+// Input mapper for slot 3.
+//
+// Movement is exposed as held direction signals.  Actions are one-cycle pulses:
+// confirm/start, shoot, bomb, EMP, cloak placeholder, Esc, and bullet-time
+// Space.  F0/E0 scan-code prefixes are tracked so make/release events become
+// stable key flags.
 module slot3_input (
     input  wire       clk,
     input  wire       reset,
@@ -24,6 +30,8 @@ module slot3_input (
 
     reg        ps2_break;
     reg        ps2_ext;
+    localparam [18:0] PS2_PREFIX_TIMEOUT_CYCLES = 19'd500000;
+    reg [18:0] ps2_prefix_timeout_q;
 
     reg key_w, key_a, key_s, key_d;
     reg key_space, key_enter, key_esc;
@@ -34,11 +42,13 @@ module slot3_input (
     reg key_esc_prev, key_j_prev, key_k_prev;
     reg key_e_prev, key_q_prev;
 
+    // Buttons and keyboard are equivalent movement sources.
     assign input_up    = btn_u | key_w | key_up;
     assign input_down  = btn_d | key_s | key_down;
     assign input_left  = btn_l | key_a | key_left;
     assign input_right = btn_r | key_d | key_right;
 
+    // One-shot action pulses are generated from rising edges of held key flags.
     assign confirm_pulse = (btn_c & ~btn_c_prev) |
                            (key_enter & ~key_enter_prev) |
                            (key_space & ~key_space_prev);
@@ -53,6 +63,7 @@ module slot3_input (
         if (reset || !selected) begin
             ps2_break <= 1'b0;
             ps2_ext <= 1'b0;
+            ps2_prefix_timeout_q <= 19'd0;
             key_w <= 1'b0; key_a <= 1'b0; key_s <= 1'b0; key_d <= 1'b0;
             key_space <= 1'b0; key_enter <= 1'b0; key_esc <= 1'b0;
             key_j <= 1'b0; key_k <= 1'b0; key_e <= 1'b0; key_q <= 1'b0;
@@ -70,7 +81,10 @@ module slot3_input (
             key_e_prev <= key_e;
             key_q_prev <= key_q;
 
+            // Decode PS/2 scan codes into held key registers.  Arrow keys are
+            // only accepted after E0; letter/action keys are plain make codes.
             if (ps2_byte_ready) begin
+                ps2_prefix_timeout_q <= 19'd0;
                 if (ps2_byte_data == 8'hF0) begin
                     ps2_break <= 1'b1;
                 end else if (ps2_byte_data == 8'hE0) begin
@@ -97,6 +111,16 @@ module slot3_input (
                     ps2_break <= 1'b0;
                     ps2_ext <= 1'b0;
                 end
+            end else if (ps2_break || ps2_ext) begin
+                if (ps2_prefix_timeout_q == PS2_PREFIX_TIMEOUT_CYCLES) begin
+                    ps2_break <= 1'b0;
+                    ps2_ext <= 1'b0;
+                    ps2_prefix_timeout_q <= 19'd0;
+                end else begin
+                    ps2_prefix_timeout_q <= ps2_prefix_timeout_q + 19'd1;
+                end
+            end else begin
+                ps2_prefix_timeout_q <= 19'd0;
             end
         end
     end
